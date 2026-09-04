@@ -15,7 +15,10 @@ struct TimelineDotBar: View {
     let nodes: [TimelineNode]
     let currentNodeId: String?
     let theme: IterateTheme
-    let onDotTap: (String) -> Void
+    let showsScrubPreview: Bool
+    let formatTime: (Date) -> String
+    let onDotTap: (TimelineNode) -> Void
+    let onScrubNodeChange: (TimelineNode) -> Void
 
     @State private var tooltipNode: TimelineNode? = nil
     @State private var tooltipDotMidY: CGFloat? = nil
@@ -41,17 +44,8 @@ struct TimelineDotBar: View {
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 cancelTooltipHide()
-                                if tooltipNode?.id == node.id {
-                                    // 再次点击同一节点：关闭 tooltip
-                                    withAnimation { tooltipNode = nil; tooltipDotMidY = nil }
-                                } else {
-                                    // 点击新节点：显示 tooltip（不自动消失）
-                                    tooltipNode = node
-                                    tooltipDotMidY = dotFrames[node.id]?.midY
-                                    if !node.content.isEmpty {
-                                        onDotTap(node.content)
-                                    }
-                                }
+                                withAnimation { tooltipNode = nil; tooltipDotMidY = nil }
+                                onDotTap(node)
                             }
                             .id(node.id)
                     }
@@ -83,17 +77,13 @@ struct TimelineDotBar: View {
         )
         .overlay(
             Group {
-                if let node = tooltipNode, !node.content.isEmpty, let tooltipY = tooltipDotMidY {
-                    tooltipView(text: node.content, nodeType: node.nodeType)
+                if showsScrubPreview, isScrubbing, let node = tooltipNode, !node.content.isEmpty, let tooltipY = tooltipDotMidY {
+                    tooltipView(node: node)
                         .alignmentGuide(.top) { dimensions in
                             dimensions[VerticalAlignment.center]
                         }
                         .offset(x: -(barWidth / 2 + 8), y: tooltipY)
                         .transition(.opacity)
-                        .onTapGesture {
-                            cancelTooltipHide()
-                            withAnimation { tooltipNode = nil }
-                        }
                 }
             },
             alignment: .topTrailing
@@ -109,17 +99,26 @@ struct TimelineDotBar: View {
         .onChange(of: tooltipNode?.id) { nodeId in
             tooltipDotMidY = nodeId.flatMap { dotFrames[$0]?.midY }
         }
-        .zIndex(tooltipNode != nil ? 999 : 0)
+        .zIndex(showsScrubPreview && tooltipNode != nil ? 999 : 0)
     }
 
     @ViewBuilder
-    private func tooltipView(text: String, nodeType: String) -> some View {
-        let preview = text.count > 80 ? String(text.prefix(80)) + "..." : text
-        let typeLabel = nodeType == "user" ? "用户" : "助手"
+    private func tooltipView(node: TimelineNode) -> some View {
+        let preview = node.content.count > 80 ? String(node.content.prefix(80)) + "..." : node.content
+        let typeLabel = node.nodeType == "user" ? "用户" : "助手"
         VStack(alignment: .leading, spacing: 4) {
-            Text(typeLabel)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.72))
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(typeLabel)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.72))
+
+                Text(formatTime(node.timestamp))
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.38))
+                    .frame(width: 42, alignment: .leading)
+
+                Spacer(minLength: 8)
+            }
             Text(preview)
                 .font(.system(size: 12))
                 .foregroundColor(.white)
@@ -196,6 +195,7 @@ struct TimelineDotBar: View {
         }
         tooltipNode = node
         tooltipDotMidY = dotFrames[node.id]?.midY
+        onScrubNodeChange(node)
     }
 
     private func endScrubbing() {
