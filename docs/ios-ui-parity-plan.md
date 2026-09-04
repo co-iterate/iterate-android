@@ -5,6 +5,8 @@
 - Related work: [Issue #1 — authenticated pairing and request loop](https://github.com/co-iterate/iterate-android/issues/1)
 - Android baseline inspected: `67902ff17ee16ad7e1adc0364b320c67e4f9d4e8`
 - iOS behavior snapshot inspected: 2026-09-04
+- iOS personal-development UI source: `17efc534a4a62dd779a4af8f92051e3b48d26a09`
+- Physical-device verification derivative: `873ce7fce840c278ba7d2829b4c4bfaadc8a874e` (the five reference files are unchanged)
 - Reference source snapshot: [`docs/reference/ios-ui/`](reference/ios-ui/README.md)
 
 ## Outcome
@@ -14,10 +16,12 @@ Rebuild the current iterate iOS companion experience in native Jetpack Compose s
 The implementation boundary is now explicit:
 
 - The request/conversation workbench is native Compose.
-- The Home/overview content may remain a WebView because the current iOS app also loads the Bridge mobile page for that route.
-- Project selection, settings, secure pairing, image preview, and the timeline are native Android surfaces.
+- The Home/overview content may remain a WebView because the current iOS app also loads the Bridge mobile page for that route, with a small allowlisted native bridge for prompt, speech-memory, training, ghost-settings, and Home requests.
+- Project selection, settings, secure pairing, image preview, timeline, quota inspection, and live-goal status are native Android surfaces.
 - Historical `NativeMainPageView` and onboarding HTML prototypes are not design sources for this work.
 - This document is self-contained. Android contributors do not need access to the private iOS source tree.
+
+The original snapshot merged in pull request #3 came from the wrong iOS working tree. It is superseded by the committed Build 19 snapshot linked above. Do not use the removed hashes, the former 1,804-line `ContentView.swift`, or branch recency as product evidence.
 
 ## Why this plan exists
 
@@ -27,7 +31,7 @@ The repository currently contains a useful Compose seed, but it represents an ol
 - The header exposes a New Chat action, while the current iOS header exposes Settings and prevent-sleep controls.
 - The footer uses an infinity glyph for a `goal` action, while iOS presents explicit **Continue** and **Confirm** actions.
 - The theme toggle changes state, but the rendered theme remains a fixed light palette.
-- Markdown, authenticated images, attachments, file mentions, prompt templates, conditional context, project switching, and the conversation timeline are missing.
+- Markdown, authenticated images, attachments, file mentions, prompt templates, conditional context, project switching, the conversation timeline, ghost completion, usage quota, and live-goal state are missing.
 - Connection state is reduced to connecting/connected/offline and does not model sent, reconnecting, rejection, or stale-state recovery.
 - Pairing payload forwarding, authenticated endpoint selection, and exact-once action acknowledgement remain incomplete; those protocol requirements are owned by Issue #1.
 
@@ -41,6 +45,7 @@ Do not polish the existing mock in place and call it parity. Replace fixture-onl
 4. **Android-native adaptation.** Respect edge-to-edge insets, system back, IME resize, Material semantics, TalkBack, font scaling, and at least 48 dp interactive targets. A 32 dp visual icon may sit inside a 48 dp target.
 5. **One source of truth.** `WorkbenchUiState` (or a replacement immutable state model) drives every visible surface. Composables do not own duplicate Bridge state.
 6. **No private implementation import.** Recreate the documented behavior; do not copy the private monorepo, credentials, signing material, relay configuration, or release infrastructure.
+7. **Port visible contracts, not Swift helper internals.** The corrected snapshot includes speech-learning stores, route recovery, relay/watch coordination, and allowlisted WebView adapters because they affect the UI. Android should model the visible state and approved protocol contracts, not mechanically translate these helpers.
 
 ## Screen hierarchy
 
@@ -92,7 +97,10 @@ On narrow devices the header may wrap or move secondary actions into an overflow
 | Footer actions | Two equally weighted actions: Continue and Confirm. Both stop voice capture first. Confirm sends the composed response; Continue sends the continue action with current text/options. | Disable or show progress while the exact invocation is awaiting authoritative ACK. Never relabel Continue as an infinity glyph. |
 | Project picker | List active projects with name, task title, path, current indicator, and sent/waiting indicator. Selecting one sends a scoped switch/sync request and closes the sheet. | Use a modal bottom sheet or full-height dialog with loading, empty, error, and retry states. |
 | Settings and pairing | Connection endpoint/status, connect/disconnect, secure pairing link import/validation, and debug-only notification/clear-message actions. Credentials remain in Android secure storage. | Manual endpoint entry belongs under advanced/diagnostics once secure pairing works. Pairing errors must distinguish malformed, expired/used, rejected, unreachable, and credential-revoked states. |
-| Home/overview | Loads the authenticated Bridge `/mobile` route and returns to the conversation when requested or when a new MCP request arrives. | WebView navigation is limited to the paired origin; external links leave the app; back navigates WebView history before closing Home. |
+| Usage quota | A project-header long press opens a sheet of provider status, account label, summary, remaining percentages, and reset labels. Empty/stale/error data is explicit. | Use a discoverable overflow or labeled action in addition to long press so TalkBack and keyboard users can reach it. Never infer account state from color alone. |
+| Codex Live goal | Show the current goal title, phase/status, progress, plan completion, elapsed time, token budget/usage, and deep-link affordance when supplied. Updates are associated with their goal/request identity. | Adapt to a compact card or sheet; keep stale/completed states distinct and validate deep links before leaving the app. |
+| Ghost completion and speech assistance | Offer synchronized command completion, explicit acceptance, editable/enabled suggestion management, and visible speech listening/error/retry states. Speech learning and corrections may sync through the paired Bridge but never auto-send the response. | Use Android IME/accessibility semantics; keep completion acceptance separate from submit, and expose management/recovery without relying on a gesture alone. |
+| Home/overview | Loads the authenticated Bridge `/mobile` route, exposes only the documented prompt/speech/training/ghost/Home request allowlist to page content, and returns to the conversation when requested or when a new MCP request arrives. | WebView navigation is limited to the paired origin; external links leave the app; back navigates WebView history before closing Home. Validate method/path/body limits before forwarding any native request. |
 
 ## Visual system
 
@@ -154,6 +162,7 @@ Extend the Android model/parser only as Issue #1 makes these fields available:
 - Request identity: `id`/`request_id`, `invocation_id`, `state_revision`.
 - Context: `project_path`, `project_id`, `project_display_name`, MCP host ID/label, host session ID, task ID/display name, created time, and deadline.
 - Workbench: message, input placeholder, predefined options, custom prompts, and timeline snapshot/delta.
+- Assistance and status: ghost-suggestion store, quota snapshot/providers/status label, and Codex Live goal snapshot.
 - Results: action accepted/rejected/idempotent, pending-invocation snapshot, connection lifecycle, and credential revocation.
 - Project list: request identity, project name/path, task title, current state, and sent/waiting state.
 
@@ -185,7 +194,8 @@ Acceptance: light/dark and 1.0×/1.3× font screenshots pass at 360×800 and 412
 2. Implement image preview, Upload image, @File, Copy source, and Quote source.
 3. Implement the multiline composer, picked/pasted images, removal, voice insertion, and server placeholder.
 4. Implement ordered option rows, quick templates with reorder, and two-dimensional conditional prompt state.
-5. Replace the old footer with Continue/Confirm and authoritative ACK behavior.
+5. Implement ghost completion acceptance and speech states without coupling either to submission.
+6. Replace the old footer with Continue/Confirm and authoritative ACK behavior.
 
 Acceptance: no hard-coded request text; all content comes from fixtures or Bridge state; duplicate taps cannot complete an invocation twice.
 
@@ -194,7 +204,8 @@ Acceptance: no hard-coded request text; all content comes from fixtures or Bridg
 1. Implement the active-project picker with scoped switching and sync.
 2. Implement timeline snapshot/delta rendering, tap, tooltip, scrub, and accessible fallback.
 3. Implement Settings with connection, secure pairing, and debug-only controls.
-4. Restrict Home WebView to the authenticated selected Bridge endpoint.
+4. Add usage-quota and Codex Live goal surfaces, including stale/error/completed states.
+5. Restrict Home WebView to the authenticated selected Bridge endpoint and its explicit native-request allowlist.
 
 Acceptance: switching project never shows another project's request or timeline as authoritative; temporary placeholders are visually identified as loading.
 
@@ -243,6 +254,8 @@ Prefer small focused files such as `ui/RequestCard.kt`, `ui/Composer.kt`, `ui/Ti
 - Reduce accepted, idempotent, rejected, stale, pending-snapshot, reconnect, and revoked-credential events.
 - Keep per-invocation drafts and per-project timelines isolated.
 - Verify prompt reorder and conditional active/value semantics.
+- Verify ghost completion matching/acceptance and suggestion management without implicit submission.
+- Reduce fresh/stale/error quota snapshots and running/completed live-goal snapshots without cross-request leakage.
 - Verify voice transcript insertion never auto-sends.
 
 ### Compose UI and screenshot tests
@@ -251,7 +264,7 @@ Prefer small focused files such as `ui/RequestCard.kt`, `ui/Composer.kt`, `ui/Ti
 - Short and very long project/task labels; empty and many option rows.
 - Long Markdown, code block, link, authenticated image placeholder/success/failure, and image overlay.
 - Light/dark at 360×800 and 412×915; portrait/landscape; 1.0× and 1.3× font scale.
-- Project picker, Settings/pairing errors, timeline tooltip/scrub, and Home WebView back behavior.
+- Project picker, Settings/pairing errors, timeline tooltip/scrub, quota sheet, live-goal states, ghost completion, and Home WebView back/allowlist behavior.
 - Semantics assert names, roles, selected/disabled states, reading order, and minimum target size.
 
 Use the repository's chosen screenshot framework; this plan does not require a specific new dependency. Golden images require human review and do not replace behavior assertions.
@@ -290,6 +303,7 @@ Each PR must stay on a feature branch, include before/after evidence, and avoid 
 - Light/dark, insets, IME, rotation, font scaling, TalkBack, and system back are verified.
 - Continue/Confirm actions are identity-bound and clear only after authoritative ACK.
 - Project, request, draft, and timeline state never leak across projects or invocations.
+- Quota, live-goal, and synchronized assistance state is identity-scoped, accessible, and never presented as fresher than its source timestamp permits.
 - Secure pairing and credential revocation satisfy Issue #1.
 - No private source, credentials, tokens, signing data, local paths, APKs, or build outputs are committed.
 - README status is updated from “seed” only after automated checks and the physical Android checklist pass.
