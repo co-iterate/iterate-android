@@ -5,6 +5,7 @@
 - Related work: [Issue #1 — authenticated pairing and request loop](https://github.com/co-iterate/iterate-android/issues/1)
 - Android baseline inspected: `67902ff17ee16ad7e1adc0364b320c67e4f9d4e8`
 - iOS behavior snapshot inspected: 2026-09-04
+- Reference source snapshot: [`docs/reference/ios-ui/`](reference/ios-ui/README.md)
 
 ## Outcome
 
