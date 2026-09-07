@@ -25,15 +25,28 @@ class BridgeClient(
     .readTimeout(0, TimeUnit.SECONDS)
     .build(),
 ) {
+  @Volatile private var activeSocket: WebSocket? = null
+
+  fun syncProject(project: ActiveProject): Boolean = activeSocket?.send(org.json.JSONObject()
+    .put("message_type", "request_sync").put("payload", org.json.JSONObject()
+      .put("client_kind", "android").put("project_path", project.path).put("request_id", project.requestId)).toString()) == true
+
+  suspend fun readJson(path: String): org.json.JSONObject = withContext(Dispatchers.IO) {
+    val http = client.newBuilder().readTimeout(10, TimeUnit.SECONDS).build()
+    http.newCall(Request.Builder().url("$baseUrl$path").build()).execute().use { response ->
+      if (!response.isSuccessful) throw IOException("读取失败：${response.code}")
+      org.json.JSONObject(response.body?.string().orEmpty())
+    }
+  }
+
   fun requests(): Flow<Result<MobileRequest>> = callbackFlow {
-    val request = Request.Builder()
-      .url(wsUrl)
-      .header("X-Iterate-Client-Kind", "android")
-      .build()
+    val request = Request.Builder().url(wsUrl).header("X-Iterate-Client-Kind", "android").build()
 
     val socket = client.newWebSocket(request, object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
+        activeSocket = webSocket
         webSocket.send("""{"message_type":"client_hello","payload":{"client_kind":"android"}}""")
+        webSocket.send("""{"message_type":"request_sync","payload":{}}""")
       }
 
       override fun onMessage(webSocket: WebSocket, text: String) {
@@ -41,12 +54,19 @@ class BridgeClient(
         if (parsed != null) trySend(Result.success(parsed))
       }
 
+      override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+        if (activeSocket === webSocket) activeSocket = null
+        trySend(Result.failure(IOException("连接已关闭")))
+      }
+
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+        if (activeSocket === webSocket) activeSocket = null
         trySend(Result.failure(t))
       }
     })
 
     awaitClose {
+      if (activeSocket === socket) activeSocket = null
       socket.close(1000, "android_compose_closed")
     }
   }
@@ -60,35 +80,12 @@ class BridgeClient(
   }
 
   suspend fun sendAction(json: String): Boolean = withContext(Dispatchers.IO) {
-    val opened = CompletableDeferred<WebSocket?>()
-    val request = Request.Builder()
-      .url(wsUrl)
-      .header("X-Iterate-Client-Kind", "android")
-      .build()
-    val socket = client.newWebSocket(request, object : WebSocketListener() {
-      override fun onOpen(webSocket: WebSocket, response: Response) {
-        opened.complete(webSocket)
-      }
-
-      override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        if (!opened.isCompleted) opened.complete(null)
-      }
-    })
-
-    val readySocket = withTimeoutOrNull(3_000) { opened.await() }
-    if (readySocket == null) {
-      socket.close(1001, "android_action_open_failed")
-      return@withContext false
-    }
-    val sent = readySocket.send(json)
-    readySocket.close(1000, "android_action_sent")
-    sent
+    activeSocket?.send(json) == true
   }
 
   suspend fun openCodexChat(): Boolean = withContext(Dispatchers.IO) {
     val body = "{}".toRequestBody("application/json".toMediaType())
-    val request = Request.Builder()
-      .url("$baseUrl/api/open-codex-chat")
+    val request = Request.Builder().url("$baseUrl/api/open-codex-chat")
       .post(body)
       .build()
     runCatching {

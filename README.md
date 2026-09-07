@@ -38,7 +38,7 @@ The Android app is a mobile companion, not a scaled desktop client. It should:
 
 Only import the minimum buildable Android client and shared protocol contracts. Do not copy the entire private monorepo.
 
-The current seed is structurally standalone, but a clean Kotlin/Gradle build has not been rerun after extraction because the source machine had less than 1 GiB free disk space. Do not treat this import commit as a build receipt.
+The original extraction was not build-verified. On 2026-09-07, a source debug build and Android 14 emulator launch were verified, followed by a native workbench UI update with 10 JVM and 8 emulator UI tests. See [the UI alignment receipt](docs/android-ui-alignment-20260907.md). This does not establish physical-device or secure-pairing parity.
 
 Never commit:
 
@@ -70,4 +70,4 @@ Create `local.properties` with your local SDK path or set `ANDROID_HOME`, then r
 ./gradlew :app:assembleDebug
 ```
 
-The imported app currently points its Bridge client and Home WebView at `127.0.0.1:8080`. That is historical behavior, not the target mobile architecture. The first product PR must replace it with authenticated pairing to the selected desktop endpoint before claiming an end-to-end connection.
+The owner scoped this candidate to Android UI only. Active projects open fully without search; image, path, copy and quote actions are present. Pairing implementation has been withdrawn from this candidate, and no desktop app was installed or restarted. Real desktop integration remains unverified.

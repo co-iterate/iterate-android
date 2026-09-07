@@ -8,6 +8,40 @@ import org.json.JSONObject
 
 class BridgeJsonParserTest {
   @Test
+  fun imagePayloadRetainsRouteAndMediaContract() {
+    val root = JSONObject(BridgeJsonParser.buildMcpAction("submit", "/project", "request-1", "draft", emptyList(), listOf(DraftImage("data:image/jpeg;base64,YQ==", "photo.jpg"))))
+    val payload = root.getJSONObject("payload")
+    assertEquals("request-1", payload.getString("request_id"))
+    assertEquals("/project", payload.getString("project_path"))
+    val image = payload.getJSONArray("images").getJSONObject(0)
+    assertEquals("image/jpeg", image.getString("media_type"))
+    assertEquals("data:image/jpeg;base64,YQ==", image.getString("data"))
+  }
+
+  @Test
+  fun rootBoundaryDoesNotAllowSiblingPrefix() {
+    assertEquals(true, isWithinRoot("/work/project/docs", "/work/project"))
+    assertEquals(false, isWithinRoot("/work/project-secret", "/work/project"))
+  }
+
+  @Test
+  fun preservesServerComposerHintAndRequestContext() {
+    val request = BridgeJsonParser.parseRequest("""
+      {"message_type":"mcp_state","payload":{"request":{
+        "request_id":"real-request","message":"Please review this change.",
+        "input_placeholder":"补充你的想法…","mcp_host_label":"Codex","task_display_name":"Android UI"
+      }}}
+    """.trimIndent())
+    assertEquals("补充你的想法…", request?.inputPlaceholder)
+    assertEquals("Codex · Android UI", request?.contextSummary)
+  }
+
+  @Test
+  fun idleProjectDoesNotDisplayAnUnrelatedFixtureProject() {
+    assertEquals("等待中", WorkbenchUiState().projectTitle)
+  }
+
+  @Test
   fun parsesMcpStateRequest() {
     val json = """
       {

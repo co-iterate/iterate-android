@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class BridgeViewModel(
@@ -13,6 +14,31 @@ class BridgeViewModel(
 ) : ViewModel() {
   var state by mutableStateOf(WorkbenchUiState())
     private set
+
+  private val drafts = mutableMapOf<Pair<String?, String?>, WorkbenchUiState>()
+  private var selectedProject: ActiveProject? = null
+
+  fun setImages(images: List<DraftImage>) { state = state.copy(images = images) }
+
+  fun selectProject(project: ActiveProject) {
+    if (!bridgeClient.syncProject(project)) {
+      state = state.copy(bridgeError = "项目切换失败，请重新连接")
+      return
+    }
+    val original = state
+    state.request?.let { drafts[it.projectPath to it.requestId] = state }
+    selectedProject = project
+    state = state.copy(request = null, userInput = "", selectedOptions = emptySet(), images = emptyList())
+    viewModelScope.launch {
+      delay(10_000)
+      if (selectedProject == project && state.request == null) {
+        selectedProject = null
+        state = original.copy(bridgeError = "未收到所选项目的请求，已保留原草稿，请重试")
+      }
+    }
+  }
+
+  private var connectionJob: Job? = null
 
   init {
     connect()
@@ -74,13 +100,29 @@ class BridgeViewModel(
     }
   }
 
+  fun reconnect() {
+    connect()
+  }
+
   private fun connect() {
-    viewModelScope.launch {
+    connectionJob?.cancel()
+    state = state.copy(connectionState = BridgeConnectionState.Connecting, bridgeError = null)
+    connectionJob = viewModelScope.launch {
       retryBridgeVersion()
       bridgeClient.requests().collect { result ->
         result
           .onSuccess { request ->
+            val target = selectedProject
+            if (target != null && (request.projectPath != target.path || request.requestId != target.requestId)) return@onSuccess
+            selectedProject = null
+            val previous = state.request
+            if (previous != null && (previous.projectPath != request.projectPath || previous.requestId != request.requestId)) {
+              drafts[previous.projectPath to previous.requestId] = state
+            }
+            val same = previous?.projectPath == request.projectPath && previous?.requestId == request.requestId
+            val draft = if (same) state else drafts[request.projectPath to request.requestId]
             state = state.copy(
+              userInput = draft?.userInput.orEmpty(), selectedOptions = draft?.selectedOptions.orEmpty(), images = draft?.images.orEmpty(),
               connectionState = BridgeConnectionState.Connected,
               request = request,
               bridgeError = null,
@@ -116,12 +158,11 @@ class BridgeViewModel(
       requestId = request?.requestId,
       userInput = state.userInput,
       selectedOptions = state.selectedOptions.toList(),
+      images = state.images,
     )
     viewModelScope.launch {
-      bridgeClient.sendAction(payload)
-      if (action == "submit") {
-        state = state.copy(userInput = "", selectedOptions = emptySet())
-      }
+      val sent = bridgeClient.sendAction(payload)
+      state = state.copy(bridgeError = if (sent) "已交给连接发送，草稿保留至下一条请求" else "发送失败，草稿已保留")
     }
   }
 }

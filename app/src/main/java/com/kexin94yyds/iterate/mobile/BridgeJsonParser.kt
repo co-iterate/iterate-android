@@ -39,6 +39,11 @@ object BridgeJsonParser {
         request.optString("browserAiResponse"),
       ),
       predefinedOptions = request.optJSONArray("predefined_options").toStringList(),
+      inputPlaceholder = firstNonBlank(request.optString("input_placeholder")),
+      contextSummary = listOfNotNull(
+        firstNonBlank(request.optString("mcp_host_label"), request.optString("mcp_host_id")),
+        firstNonBlank(request.optString("task_display_name"), request.optString("task_id")),
+      ).takeIf { it.isNotEmpty() }?.joinToString(" · "),
     )
   }
 
@@ -48,6 +53,7 @@ object BridgeJsonParser {
     requestId: String?,
     userInput: String,
     selectedOptions: List<String>,
+    images: List<DraftImage> = emptyList(),
   ): String {
     val payload = JSONObject()
       .put("action", action)
@@ -62,6 +68,10 @@ object BridgeJsonParser {
     if (selectedOptions.isNotEmpty()) {
       payload.put("selected_options", JSONArray(selectedOptions))
     }
+
+    if (images.isNotEmpty()) payload.put("images", JSONArray(images.map {
+      JSONObject().put("data", it.data).put("media_type", it.mediaType).put("filename", it.filename)
+    }))
 
     return JSONObject()
       .put("message_type", "mcp_action")

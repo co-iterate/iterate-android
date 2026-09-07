@@ -1,47 +1,53 @@
 package com.kexin94yyds.iterate.mobile
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,7 +56,6 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun WorkbenchHeader(
   title: String,
-  subtitle: String,
   connectionLabel: String,
   connectionState: BridgeConnectionState,
   notificationsEnabled: Boolean,
@@ -59,291 +64,173 @@ fun WorkbenchHeader(
   onNotificationClick: () -> Unit,
   onThemeClick: () -> Unit,
   onNewChatClick: () -> Unit,
+  onProjectsClick: () -> Unit = {},
 ) {
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .background(IosParityColors.Background)
-      .border(width = 0.5.dp, color = IosParityColors.SurfaceBorder)
-      .padding(start = 14.dp, end = 14.dp, top = 30.dp, bottom = 14.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Text("∞", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = IosParityColors.Text)
-    Spacer(Modifier.width(14.dp))
-    Column(modifier = Modifier.weight(1f)) {
-      Text(
-        text = title,
-        fontSize = 17.sp,
-        fontWeight = FontWeight.Bold,
-        color = IosParityColors.Text,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-      Text(
-        text = subtitle,
-        fontSize = 12.sp,
-        color = IosParityColors.TextSecondary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-    }
-    HeaderIconButton(Icons.Default.Home, "Home", onHomeClick)
-    HeaderIconButton(
-      icon = if (notificationsEnabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
-      label = "Notifications",
-      action = onNotificationClick,
-    )
-    HeaderIconButton(
-      icon = if (lightAppearance) Icons.Default.DarkMode else Icons.Default.LightMode,
-      label = "Theme",
-      action = onThemeClick,
-    )
-    HeaderIconButton(Icons.Default.Add, "New chat", onNewChatClick)
-    Spacer(Modifier.width(8.dp))
-    Box(
-      modifier = Modifier
-        .size(9.dp)
-        .clip(CircleShape)
-        .background(
-          if (connectionState == BridgeConnectionState.Connected) {
-            IosParityColors.Connected
-          } else {
-            IosParityColors.TextSecondary
-          },
-        ),
-    )
-    Spacer(Modifier.width(4.dp))
-    Text(
-      text = connectionLabel,
-      fontSize = 12.sp,
-      color = IosParityColors.TextSecondary,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-  }
-}
-
-@Composable
-fun HeaderIconButton(icon: ImageVector, label: String, action: () -> Unit) {
-  Box(
-    modifier = Modifier
-      .padding(start = 6.dp)
-      .size(42.dp)
-      .clip(CircleShape)
-      .background(IosParityColors.IconCircle)
-      .clickable(onClick = action),
-    contentAlignment = Alignment.Center,
-  ) {
-    Icon(icon, contentDescription = label, tint = IosParityColors.Text, modifier = Modifier.size(22.dp))
-  }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun MessageCard(request: MobileRequest) {
-  Surface(
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    color = IosParityColors.Surface,
-    border = BorderStroke(1.dp, IosParityColors.FocusBorder),
-  ) {
-    Column(modifier = Modifier.padding(16.dp)) {
-      Text(request.message, fontSize = 18.sp, lineHeight = 28.sp, color = IosParityColors.Text)
-      Spacer(Modifier.height(14.dp))
-      if (!request.browserAiResponse.isNullOrBlank()) {
-        CodeBlock(text = request.browserAiResponse)
-        Spacer(Modifier.height(14.dp))
+  val colors = WorkbenchTheme.colors
+  Column {
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 6.dp)) {
+      val wrapActions = maxWidth < 336.dp || LocalDensity.current.fontScale > 1.15f
+      val actions: @Composable () -> Unit = {
+        Row {
+          HeaderIconButton(Icons.Default.Home, "打开首页", onHomeClick)
+          HeaderIconButton(
+            if (notificationsEnabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+            if (notificationsEnabled) "关闭通知" else "开启通知",
+            onNotificationClick,
+          )
+          HeaderIconButton(
+            if (lightAppearance) Icons.Default.DarkMode else Icons.Default.LightMode,
+            if (lightAppearance) "切换到深色模式" else "切换到浅色模式",
+            onThemeClick,
+          )
+          HeaderIconButton(Icons.Default.Add, "新建会话", onNewChatClick)
+        }
       }
-      Text("验证结果:", fontSize = 17.sp, color = IosParityColors.Text)
-      Spacer(Modifier.height(10.dp))
-      Text("• DMG notarization: Accepted", fontSize = 15.sp, lineHeight = 24.sp, color = IosParityColors.Text)
-      Text("• stapler staple/validate: 通过", fontSize = 15.sp, lineHeight = 24.sp, color = IosParityColors.Text)
-      Text("• codesign --verify: 通过", fontSize = 15.sp, lineHeight = 24.sp, color = IosParityColors.Text)
-      Spacer(Modifier.height(16.dp))
-      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SmallActionButton("上传图片")
-        SmallActionButton("路径")
-        SmallActionButton("复制原文")
-        SmallActionButton("引用原文")
+      if (wrapActions) {
+        Column {
+          ProjectIdentity(title, connectionLabel, connectionState, Modifier.fillMaxWidth().clickable(onClick = onProjectsClick))
+          Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { actions() }
+        }
+      } else {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          ProjectIdentity(title, connectionLabel, connectionState, Modifier.weight(1f).clickable(onClick = onProjectsClick))
+          actions()
+        }
       }
     }
+    HorizontalDivider(color = colors.border.copy(alpha = 0.7f), thickness = 0.5.dp)
   }
 }
 
 @Composable
-fun CodeBlock(text: String) {
-  Surface(
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    color = Color.White,
-    border = BorderStroke(1.dp, IosParityColors.SurfaceBorder),
-  ) {
-    Box {
-      Text(
-        text = text,
-        fontFamily = FontFamily.Monospace,
-        fontSize = 15.sp,
-        lineHeight = 21.sp,
-        color = Color.Black,
-        modifier = Modifier.padding(14.dp),
-      )
-      Row(
-        modifier = Modifier
-          .align(Alignment.TopEnd)
-          .padding(8.dp)
-          .clip(RoundedCornerShape(8.dp))
-          .background(IosParityColors.Background)
-          .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Icon(Icons.Default.ContentCopy, contentDescription = "复制", tint = IosParityColors.TextSecondary, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text("复制", fontSize = 13.sp, color = IosParityColors.TextSecondary, fontWeight = FontWeight.Bold)
-      }
-    }
-  }
-}
-
-@Composable
-fun EmptyWorkbenchCard(bridgeError: String?) {
-  Surface(
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    color = IosParityColors.Surface,
-    border = BorderStroke(1.dp, IosParityColors.SurfaceBorder),
-  ) {
-    Column(modifier = Modifier.padding(18.dp)) {
-      Text("正在等待指令", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = IosParityColors.Text)
-      Spacer(Modifier.height(8.dp))
-      val detail = bridgeError?.let { "Bridge: $it" } ?: "连接后这里会显示当前请求。"
-      Text(detail, fontSize = 14.sp, color = IosParityColors.TextSecondary)
-    }
-  }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun InputSection(
-  value: String,
-  predefinedOptions: List<String>,
-  selectedOptions: Set<String>,
-  onValueChange: (String) -> Unit,
-  onOptionClick: (String) -> Unit,
-) {
-  Spacer(Modifier.height(16.dp))
-  OutlinedTextField(
-    value = value,
-    onValueChange = onValueChange,
-    modifier = Modifier.fillMaxWidth(),
-    minLines = 3,
-    placeholder = { Text("输入回复...") },
-  )
-  if (predefinedOptions.isNotEmpty()) {
-    Spacer(Modifier.height(10.dp))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      predefinedOptions.forEach { option ->
-        SmallActionButton(
-          text = option,
-          selected = selectedOptions.contains(option),
-          onClick = { onOptionClick(option) },
-        )
-      }
-    }
-  }
-}
-
-@Composable
-fun SmallActionButton(text: String, selected: Boolean = false, onClick: () -> Unit = {}) {
-  Surface(
-    modifier = Modifier.clickable(onClick = onClick),
-    shape = RoundedCornerShape(8.dp),
-    color = if (selected) Color.Black else Color.White,
-    border = BorderStroke(1.dp, IosParityColors.SurfaceBorder),
-  ) {
-    Text(
-      text = text,
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-      fontSize = 14.sp,
-      color = if (selected) Color.White else IosParityColors.Text,
-    )
-  }
-}
-
-@Composable
-fun FooterBar(
-  voiceState: VoiceInputState,
-  onVoiceClick: () -> Unit,
-  onGoalClick: () -> Unit,
-  onSubmitClick: () -> Unit,
+private fun ProjectIdentity(
+  title: String,
+  connectionLabel: String,
+  connectionState: BridgeConnectionState,
   modifier: Modifier = Modifier,
 ) {
-  Box(modifier = modifier.fillMaxWidth()) {
-    Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(top = 38.dp)
-        .background(IosParityColors.Footer)
-        .border(width = 0.5.dp, color = IosParityColors.SurfaceBorder)
-        .padding(horizontal = 16.dp, vertical = 16.dp),
-    ) {
-      Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(
-          modifier = Modifier
-            .weight(1f)
-            .height(54.dp),
-          onClick = onGoalClick,
-          colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = IosParityColors.Text),
-          shape = RoundedCornerShape(12.dp),
-        ) {
-          Text("∞", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+  val colors = WorkbenchTheme.colors
+  Row(modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+    Box(Modifier.size(width = 30.dp, height = 34.dp), contentAlignment = Alignment.CenterStart) {
+      InfinityMark(pointSize = 20f, color = colors.text)
+    }
+    Spacer(Modifier.width(8.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.text,
+          maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(14.dp))
+      }
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = connectionLabel },
+      ) {
+        val statusColor = when (connectionState) {
+          BridgeConnectionState.Connected -> colors.success
+          BridgeConnectionState.Connecting -> colors.warning
+          BridgeConnectionState.Offline -> colors.error
         }
-        Button(
-          modifier = Modifier
-            .weight(1f)
-            .height(54.dp),
-          onClick = onSubmitClick,
-          colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
-          shape = RoundedCornerShape(12.dp),
-        ) {
-          Text("确认", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        }
+        Box(Modifier.size(6.dp).clip(CircleShape).background(statusColor))
+        Text(connectionLabel, fontSize = 11.sp, color = colors.secondaryText, maxLines = 1)
       }
     }
-    VoiceHalfCircleDock(
-      voiceState = voiceState,
-      onClick = onVoiceClick,
-      modifier = Modifier
-        .align(Alignment.TopCenter)
-        .offset(y = 0.dp),
-    )
   }
 }
 
 @Composable
-fun VoiceHalfCircleDock(voiceState: VoiceInputState, onClick: () -> Unit, modifier: Modifier = Modifier) {
-  val borderColor = when (voiceState) {
-    VoiceInputState.Listening -> IosParityColors.Connected
-    VoiceInputState.PermissionDenied, VoiceInputState.Error -> IosParityColors.Warning
-    VoiceInputState.Idle -> IosParityColors.SurfaceBorder
-  }
-  Box(
-    modifier = modifier
-      .size(width = 118.dp, height = 76.dp)
-      .clip(RoundedCornerShape(topStart = 76.dp, topEnd = 76.dp))
-      .background(IosParityColors.Footer)
-      .border(1.dp, IosParityColors.SurfaceBorder, RoundedCornerShape(topStart = 76.dp, topEnd = 76.dp))
-      .clickable(onClick = onClick),
-    contentAlignment = Alignment.Center,
-  ) {
+private fun HeaderIconButton(icon: ImageVector, label: String, action: () -> Unit) {
+  val colors = WorkbenchTheme.colors
+  IconButton(onClick = action, modifier = Modifier.size(48.dp)) {
     Box(
-      modifier = Modifier
-        .size(56.dp)
+      Modifier
+        .size(36.dp)
         .clip(CircleShape)
-        .background(Color.White)
-        .border(2.dp, borderColor, CircleShape),
+        .background(Brush.verticalGradient(listOf(colors.background, colors.card.copy(alpha = 0.75f))))
+        .border(0.5.dp, colors.border.copy(alpha = 0.75f), CircleShape),
       contentAlignment = Alignment.Center,
     ) {
-      Icon(Icons.Default.Mic, contentDescription = "语音输入", tint = IosParityColors.TextSecondary, modifier = Modifier.size(30.dp))
+      Icon(icon, contentDescription = label, tint = colors.text, modifier = Modifier.size(18.dp))
+    }
+  }
+}
+
+@Composable
+fun MessageCard(request: MobileRequest, onCopy: () -> Unit, onQuote: () -> Unit, onImage: () -> Unit = {}, onPath: () -> Unit = {}) {
+  val colors = WorkbenchTheme.colors
+  Surface(
+    modifier = Modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(8.dp),
+    color = colors.card,
+    border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.2f)),
+  ) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      request.contextSummary?.let { summary ->
+        Text(summary, fontSize = 11.sp, lineHeight = 17.sp, color = colors.secondaryText)
+      }
+      SelectionContainer { RequestMarkdown(request.message) }
+      request.browserAiResponse?.takeIf { it.isNotBlank() && it != request.message }?.let { response ->
+        HorizontalDivider(color = colors.border)
+        SelectionContainer { RequestMarkdown(response) }
+      }
+      HorizontalDivider(color = colors.border)
+      Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+      ) {
+        RequestAction("上传图片", Icons.Default.Image, onImage)
+        RequestAction("路径", Icons.Default.FolderOpen, onPath)
+        RequestAction("复制原文", Icons.Default.ContentCopy, onCopy)
+        RequestAction("引用原文", Icons.Default.FormatQuote, onQuote)
+      }
+    }
+  }
+}
+
+@Composable
+private fun RequestAction(label: String, icon: ImageVector, onClick: () -> Unit) {
+  val colors = WorkbenchTheme.colors
+  Box(
+    Modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick),
+    contentAlignment = Alignment.Center,
+  ) {
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = colors.background,
+      border = BorderStroke(0.5.dp, colors.border),
+    ) {
+      Row(
+        Modifier.heightIn(min = 32.dp).padding(horizontal = 7.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Icon(icon, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(14.dp))
+        Text(label, color = colors.text, fontSize = 11.sp)
+      }
+    }
+  }
+}
+
+@Composable
+fun EmptyWorkbenchState(connectionState: BridgeConnectionState, onRetry: () -> Unit) {
+  val colors = WorkbenchTheme.colors
+  val message = when (connectionState) {
+    BridgeConnectionState.Connected -> "当前没有待处理的 MCP 请求"
+    BridgeConnectionState.Connecting -> "正在连接电脑"
+    BridgeConnectionState.Offline -> "电脑连接已断开"
+  }
+  Column(
+    modifier = Modifier.fillMaxWidth().padding(vertical = 56.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    Text(message, fontSize = 13.sp, color = colors.secondaryText)
+    TextButton(onClick = onRetry, enabled = connectionState != BridgeConnectionState.Connecting) {
+      Text(
+        if (connectionState == BridgeConnectionState.Connected) "重新尝试同步" else "重新连接",
+        fontSize = 12.sp,
+        color = if (connectionState == BridgeConnectionState.Connecting) colors.secondaryText else colors.accent,
+      )
     }
   }
 }

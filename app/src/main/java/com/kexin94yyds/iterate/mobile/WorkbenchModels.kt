@@ -25,6 +25,8 @@ data class MobileRequest(
   val message: String,
   val browserAiResponse: String?,
   val predefinedOptions: List<String>,
+  val inputPlaceholder: String? = null,
+  val contextSummary: String? = null,
 )
 
 data class WorkbenchUiState(
@@ -37,9 +39,10 @@ data class WorkbenchUiState(
   val notificationsEnabled: Boolean = true,
   val lightAppearance: Boolean = true,
   val bridgeError: String? = null,
+  val images: List<DraftImage> = emptyList(),
 ) {
   val projectTitle: String
-    get() = request?.projectName?.ifBlank { "iterate" } ?: "Agents-Anywhere..."
+    get() = request?.projectName?.ifBlank { "iterate" } ?: "等待中"
 
   val requestStatusText: String
     get() = if (request == null) "正在等待指令" else "等待中"
@@ -51,3 +54,6 @@ data class WorkbenchUiState(
       BridgeConnectionState.Offline -> "离线"
     }
 }
+
+data class DraftImage(val data: String, val filename: String, val mediaType: String = "image/jpeg")
+data class ActiveProject(val path: String, val requestId: String, val name: String, val title: String)
