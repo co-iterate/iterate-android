@@ -130,6 +130,7 @@ private fun ProjectIdentity(
           BridgeConnectionState.Connected -> colors.success
           BridgeConnectionState.Connecting -> colors.warning
           BridgeConnectionState.Offline -> colors.error
+          else -> colors.warning
         }
         Box(Modifier.size(6.dp).clip(CircleShape).background(statusColor))
         Text(connectionLabel, fontSize = 11.sp, color = colors.secondaryText, maxLines = 1)
@@ -218,6 +219,9 @@ fun EmptyWorkbenchState(connectionState: BridgeConnectionState, onRetry: () -> U
     BridgeConnectionState.Connected -> "当前没有待处理的 MCP 请求"
     BridgeConnectionState.Connecting -> "正在连接电脑"
     BridgeConnectionState.Offline -> "电脑连接已断开"
+    BridgeConnectionState.Unpaired -> "连接电脑后，在这里接收与回复消息"
+    BridgeConnectionState.Retrying -> "正在重新连接电脑"
+    BridgeConnectionState.WaitingNetwork -> "等待网络恢复"
   }
   Column(
     modifier = Modifier.fillMaxWidth().padding(vertical = 56.dp),
@@ -227,7 +231,7 @@ fun EmptyWorkbenchState(connectionState: BridgeConnectionState, onRetry: () -> U
     Text(message, fontSize = 13.sp, color = colors.secondaryText)
     TextButton(onClick = onRetry, enabled = connectionState != BridgeConnectionState.Connecting) {
       Text(
-        if (connectionState == BridgeConnectionState.Connected) "重新尝试同步" else "重新连接",
+        if (connectionState == BridgeConnectionState.Unpaired) "连接电脑" else if (connectionState == BridgeConnectionState.Connected) "重新尝试同步" else "重新连接",
         fontSize = 12.sp,
         color = if (connectionState == BridgeConnectionState.Connecting) colors.secondaryText else colors.accent,
       )

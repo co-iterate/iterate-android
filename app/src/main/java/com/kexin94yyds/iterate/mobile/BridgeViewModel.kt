@@ -3,15 +3,17 @@ package com.kexin94yyds.iterate.mobile
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-class BridgeViewModel(
-  private val bridgeClient: BridgeClient = BridgeClient(),
-) : ViewModel() {
+class BridgeViewModel(application: Application) : AndroidViewModel(application) {
+  val manager = ConnectionManager.get(application)
+  private val bridgeClient get() = manager.client
+  private val preferences = application.getSharedPreferences("mobile_preferences", android.content.Context.MODE_PRIVATE)
   var state by mutableStateOf(WorkbenchUiState())
     private set
 
@@ -21,7 +23,7 @@ class BridgeViewModel(
   fun setImages(images: List<DraftImage>) { state = state.copy(images = images) }
 
   fun selectProject(project: ActiveProject) {
-    if (!bridgeClient.syncProject(project)) {
+    if (!manager.selectRoute(project)) {
       state = state.copy(bridgeError = "项目切换失败，请重新连接")
       return
     }
@@ -38,10 +40,25 @@ class BridgeViewModel(
     }
   }
 
-  private var connectionJob: Job? = null
-
   init {
-    connect()
+    state = state.copy(lightAppearance = preferences.getBoolean("light", true), notificationsEnabled = preferences.getBoolean("notifications", true))
+    viewModelScope.launch {
+      manager.state.collect { snapshot ->
+        val request = snapshot.request
+        if (request != null) {
+          val target = selectedProject
+          if (target == null || request.projectPath == target.path && request.requestId == target.requestId) {
+            selectedProject = null
+            val previous = state.request
+            val same = previous?.projectPath == request.projectPath && previous?.requestId == request.requestId
+            if (!same && previous != null) drafts[previous.projectPath to previous.requestId] = state
+            val draft = if (same) state else drafts[request.projectPath to request.requestId]
+            state = state.copy(request = request, userInput = draft?.userInput.orEmpty(), selectedOptions = draft?.selectedOptions.orEmpty(), images = draft?.images.orEmpty())
+          }
+        } else state = state.copy(request = null)
+        state = state.copy(connectionState = snapshot.state, bridgeError = snapshot.replyStatus ?: snapshot.error, pendingReply = snapshot.pendingReply)
+      }
+    }
   }
 
   fun showHome() {
@@ -88,70 +105,28 @@ class BridgeViewModel(
 
   fun toggleNotifications() {
     state = state.copy(notificationsEnabled = !state.notificationsEnabled)
+    preferences.edit().putBoolean("notifications", state.notificationsEnabled).apply()
   }
 
   fun toggleTheme() {
     state = state.copy(lightAppearance = !state.lightAppearance)
+    preferences.edit().putBoolean("light", state.lightAppearance).apply()
   }
 
   fun openNewChat() {
     viewModelScope.launch {
-      bridgeClient.openCodexChat()
+      if (bridgeClient?.openCodexChat() != true) state = state.copy(bridgeError = "未能打开电脑任务，请检查连接")
     }
   }
 
-  fun reconnect() {
-    connect()
-  }
-
-  private fun connect() {
-    connectionJob?.cancel()
-    state = state.copy(connectionState = BridgeConnectionState.Connecting, bridgeError = null)
-    connectionJob = viewModelScope.launch {
-      retryBridgeVersion()
-      bridgeClient.requests().collect { result ->
-        result
-          .onSuccess { request ->
-            val target = selectedProject
-            if (target != null && (request.projectPath != target.path || request.requestId != target.requestId)) return@onSuccess
-            selectedProject = null
-            val previous = state.request
-            if (previous != null && (previous.projectPath != request.projectPath || previous.requestId != request.requestId)) {
-              drafts[previous.projectPath to previous.requestId] = state
-            }
-            val same = previous?.projectPath == request.projectPath && previous?.requestId == request.requestId
-            val draft = if (same) state else drafts[request.projectPath to request.requestId]
-            state = state.copy(
-              userInput = draft?.userInput.orEmpty(), selectedOptions = draft?.selectedOptions.orEmpty(), images = draft?.images.orEmpty(),
-              connectionState = BridgeConnectionState.Connected,
-              request = request,
-              bridgeError = null,
-            )
-          }
-          .onFailure { error ->
-            state = state.copy(
-              connectionState = BridgeConnectionState.Offline,
-              bridgeError = error.message,
-            )
-          }
-      }
-    }
-  }
-
-  private suspend fun retryBridgeVersion() {
-    repeat(30) {
-      val ok = runCatching { bridgeClient.checkVersion() }.isSuccess
-      if (ok) {
-        state = state.copy(connectionState = BridgeConnectionState.Connected, bridgeError = null)
-        return
-      }
-      delay(500)
-    }
-    state = state.copy(connectionState = BridgeConnectionState.Offline, bridgeError = "bridge unavailable")
-  }
+  fun reconnect() { manager.reconnect() }
 
   private fun sendAction(action: String) {
     val request = state.request
+    if (request?.requestId.isNullOrBlank() || request?.projectPath.isNullOrBlank()) {
+      state = state.copy(bridgeError = "请先连接电脑并选择待回复的消息")
+      return
+    }
     val payload = BridgeJsonParser.buildMcpAction(
       action = action,
       projectPath = request?.projectPath,
@@ -160,9 +135,8 @@ class BridgeViewModel(
       selectedOptions = state.selectedOptions.toList(),
       images = state.images,
     )
-    viewModelScope.launch {
-      val sent = bridgeClient.sendAction(payload)
-      state = state.copy(bridgeError = if (sent) "已交给连接发送，草稿保留至下一条请求" else "发送失败，草稿已保留")
+    if (!manager.queueReply(org.json.JSONObject(payload).getJSONObject("payload"))) {
+      state = state.copy(bridgeError = "已有待确认回复或尚未配对，内容已保留")
     }
   }
 }

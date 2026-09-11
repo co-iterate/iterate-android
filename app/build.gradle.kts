@@ -97,6 +97,7 @@ dependencies {
     implementation("org.commonmark:commonmark-ext-gfm-tables:0.24.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260522")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")

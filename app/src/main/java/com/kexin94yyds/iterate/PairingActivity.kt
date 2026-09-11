@@ -17,11 +17,7 @@ class PairingActivity : Activity() {
   }
 
   private fun forwardPairingIntent() {
-    val payload = intent
-      ?.data
-      ?.getQueryParameter("payload")
-      ?.trim()
-      ?.takeIf { it.isNotEmpty() }
+    val payload = intent?.data?.toString()?.takeIf { it.isNotBlank() }
 
     val mainIntent = Intent(this, MainActivity::class.java)
       .setAction(Intent.ACTION_MAIN)

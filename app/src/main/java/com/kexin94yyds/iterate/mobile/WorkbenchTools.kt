@@ -44,7 +44,7 @@ fun WorkbenchTools(
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
-  val client = remember { BridgeClient() }
+  val manager = remember { if (preview) null else ConnectionManager.get(context) }
   val latestState by rememberUpdatedState(state)
   var sheet by remember { mutableStateOf<String?>(null) }
   var directory by remember { mutableStateOf("") }
@@ -97,7 +97,7 @@ fun WorkbenchTools(
           ActiveProject("/preview/iterate", "ui-preview-only", "iterate · 预览", "安卓界面，与 iOS 对齐"),
           ActiveProject("/preview/notes", "ui-preview-notes", "notes · 预览", "整理今天的记录"),
         ) else {
-          val data = client.readJson("/api/active-sessions").optJSONArray("sessions")
+          val data = (manager?.client ?: error("请先配对电脑")).readJson("/api/active-sessions").optJSONArray("sessions")
           (0 until (data?.length() ?: 0)).mapNotNull { i ->
             val item = data!!.getJSONObject(i)
             val path = item.optString("project_path")
@@ -109,7 +109,7 @@ fun WorkbenchTools(
       } else {
         if (directory.isEmpty()) {
           roots = if (preview) listOf("/preview") else {
-            val data = client.readJson("/files/roots").optJSONArray("roots")
+            val data = (manager?.client ?: error("请先配对电脑")).readJson("/files/roots").optJSONArray("roots")
             (0 until (data?.length() ?: 0)).map { data!!.getString(it).trimEnd('/').ifEmpty { "/" } }
           }
           require(roots.isNotEmpty()) { "电脑尚未开放可浏览的目录" }
@@ -117,7 +117,7 @@ fun WorkbenchTools(
         } else {
           require(roots.any { isWithinRoot(directory, it) }) { "目录超出允许范围" }
           files = if (preview) listOf("docs/", "README.md", "notes.md") else {
-            val data = client.readJson("/files?project_path=${URLEncoder.encode(directory, "UTF-8")}&max_depth=0").optJSONArray("files")
+            val data = (manager?.client ?: error("请先配对电脑")).readJson("/files?project_path=${URLEncoder.encode(directory, "UTF-8")}&max_depth=0").optJSONArray("files")
             (0 until (data?.length() ?: 0)).map { data!!.getString(it) }
               .filter { it.trimEnd('/').isNotEmpty() && !it.startsWith('/') && it.trimEnd('/').split('/').none { part -> part == ".." || part == "." } }
           }

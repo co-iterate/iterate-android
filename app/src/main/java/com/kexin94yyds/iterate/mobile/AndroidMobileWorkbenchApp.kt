@@ -9,8 +9,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 @Composable
 fun AndroidMobileWorkbenchApp(
   activity: Activity?,
+  pairingPayload: String = "",
   viewModel: BridgeViewModel = composeViewModel(),
 ) {
+  androidx.compose.runtime.LaunchedEffect(pairingPayload) { if (pairingPayload.isNotBlank()) viewModel.showHome() }
   val voiceController = remember(activity) {
     activity?.let {
       VoiceInputController(
@@ -49,7 +51,7 @@ fun AndroidMobileWorkbenchApp(
           voiceController?.stop()
           viewModel.sendSubmit()
         },
-        onRetryClick = viewModel::reconnect,
+        onRetryClick = { if (state.connectionState == BridgeConnectionState.Unpaired) viewModel.showHome() else viewModel.reconnect() },
         onVoiceClick = {
           if (state.voiceState == VoiceInputState.Listening) {
             voiceController?.stop()
@@ -58,8 +60,8 @@ fun AndroidMobileWorkbenchApp(
           }
         },
       )
-      WorkbenchRoute.Home -> MobileWebViewScreen(
-        onBackToConversation = { viewModel.showConversation() },
+      WorkbenchRoute.Home -> ConnectionSettings(initialPayload = pairingPayload,
+        onBack = { viewModel.showConversation() },
       )
     }
   }
