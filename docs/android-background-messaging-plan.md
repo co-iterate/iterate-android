@@ -2,6 +2,12 @@
 
 Date: 2026-09-11. Status: proposed implementation plan; production code unchanged.
 
+Baseline experiment completed: [API 34 emulator receipt](validation/android-connection-2026-09-11/README.md).
+Build and six unit tests passed; the same socket responded for roughly five
+minutes including three minutes in the background. Automatic recovery and
+truthful disconnected UI did not pass. System push and real-device acceptance
+remain unimplemented/unverified.
+
 ## Outcome
 
 Let users continue an iterate conversation across foreground use, background use,
