@@ -25,7 +25,7 @@ Desktop counterpart: `/Users/apple/.codex/worktrees/cunzhi-android-companion-com
 
 ## Outstanding before claiming completion
 
-1. Full desktop candidate build/test is running in owner-authorized private CI at https://github.com/kexin94yyds/iterate/actions/runs/34612276914. Verify native auth, iOS pairing regression and reply-route authorization/deduplication.
+1. Full desktop CI run 34612907422 passed: 7 native pairing tests, 3 reply journal tests and Apple Silicon executable build. Candidate a21e82862 was downloaded and its hash verified; the local candidate bundle passed Developer ID deep/strict signature and source receipt verification plus a read-only --version loader check. Real reply-route authorization/delivery integration is still pending. The first CI run failed two journal fixtures; atomic unique test-directory suffixes resolved the observed failures in the final run.
 2. Independent read-only review when the owner authorizes a reviewer; no subagent has been started.
 3. Extend emulator acceptance to full process death/restart, pairing changes and network transitions; fixture coverage currently verifies Keystore reread, service Stop, notification click and same-ID transport retry.
 4. Test the real authenticated desktop chain, project/file/image access and reply receipt. Current desktop installation is unchanged and still rejects Android claims.
