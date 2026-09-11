@@ -1,0 +1,48 @@
+{
+  "paused": {
+    "phase": "retrying",
+    "accepting": false,
+    "rejectedHandshakes": 9,
+    "started": "2026-09-11T08:39:56.507Z",
+    "connectionCount": 1,
+    "messageCount": 11,
+    "connections": [
+      {
+        "id": 1,
+        "openedAt": "2026-09-11T08:40:05.873Z",
+        "pings": 8,
+        "pongs": 8,
+        "closedAt": "2026-09-11T08:44:12.427Z",
+        "open": false
+      }
+    ]
+  },
+  "recovered": {
+    "phase": "recovery",
+    "accepting": true,
+    "rejectedHandshakes": 9,
+    "started": "2026-09-11T08:39:56.507Z",
+    "connectionCount": 2,
+    "messageCount": 13,
+    "connections": [
+      {
+        "id": 1,
+        "openedAt": "2026-09-11T08:40:05.873Z",
+        "pings": 8,
+        "pongs": 8,
+        "closedAt": "2026-09-11T08:44:12.427Z",
+        "open": false
+      },
+      {
+        "id": 2,
+        "openedAt": "2026-09-11T08:45:05.133Z",
+        "pings": 1,
+        "pongs": 1,
+        "open": true
+      }
+    ]
+  },
+  "reconnected": true,
+  "retryingUiNotConnected": true,
+  "recoveredUiConnected": true
+}
