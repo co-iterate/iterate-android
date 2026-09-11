@@ -4,11 +4,12 @@ import android.app.Activity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.lifecycle.viewmodel.compose.viewModel as lifecycleViewModel
 
 @Composable
 fun AndroidMobileWorkbenchApp(
   activity: Activity?,
-  viewModel: BridgeViewModel = remember { BridgeViewModel() },
+  viewModel: BridgeViewModel = lifecycleViewModel(),
 ) {
   val voiceController = remember(activity) {
     activity?.let {

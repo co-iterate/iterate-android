@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class BridgeViewModel(
@@ -76,36 +75,22 @@ class BridgeViewModel(
 
   private fun connect() {
     viewModelScope.launch {
-      retryBridgeVersion()
-      bridgeClient.requests().collect { result ->
-        result
-          .onSuccess { request ->
+      bridgeClient.events().collect { event ->
+        when (event) {
+          is BridgeEvent.RequestReceived -> {
             state = state.copy(
-              connectionState = BridgeConnectionState.Connected,
-              request = request,
-              bridgeError = null,
+              request = event.request,
             )
           }
-          .onFailure { error ->
+          is BridgeEvent.Connection -> {
             state = state.copy(
-              connectionState = BridgeConnectionState.Offline,
-              bridgeError = error.message,
+              connectionState = event.state,
+              bridgeError = event.error,
             )
           }
+        }
       }
     }
-  }
-
-  private suspend fun retryBridgeVersion() {
-    repeat(30) {
-      val ok = runCatching { bridgeClient.checkVersion() }.isSuccess
-      if (ok) {
-        state = state.copy(connectionState = BridgeConnectionState.Connected, bridgeError = null)
-        return
-      }
-      delay(500)
-    }
-    state = state.copy(connectionState = BridgeConnectionState.Offline, bridgeError = "bridge unavailable")
   }
 
   private fun sendAction(action: String) {
