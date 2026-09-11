@@ -28,13 +28,14 @@ class ConnectionManager private constructor(context: Context) {
   val state: StateFlow<Snapshot> = mutable
   private val callback = object : ConnectivityManager.NetworkCallback() {
     override fun onAvailable(value: Network) { scope.launch { ensureConnection() } }
-    override fun onLost(value: Network) { scope.launch { if (!hasNetwork()) { stopSocket(); mutable.value = mutable.value.copy(state = BridgeConnectionState.WaitingNetwork) } } }
+    override fun onLost(value: Network) { scope.launch { if (paired != null && !hasNetwork()) { stopSocket(); mutable.value = mutable.value.copy(state = BridgeConnectionState.WaitingNetwork) } } }
     override fun onCapabilitiesChanged(value: Network, capabilities: NetworkCapabilities) { scope.launch { ensureConnection() } }
   }
   init {
     runCatching { store.load() }.onSuccess { paired = it; client = it?.client() }
       .onFailure { mutable.value = Snapshot(error = "设备凭据无法读取，请重新配对") }
-    if (runCatching { store.readSecret("pending_reply") }.getOrNull() != null) mutable.value = mutable.value.copy(pendingReply = true, replyStatus = "有待确认的回复，连接后继续发送")
+    // Presence does not require decryption: an unreadable reply must never be overwritten.
+    if (store.hasSecret("pending_reply")) mutable.value = mutable.value.copy(pendingReply = true, replyStatus = "有待确认的回复，连接后继续发送")
     network.registerDefaultNetworkCallback(callback)
   }
   private fun hasNetwork(): Boolean = network.activeNetwork != null

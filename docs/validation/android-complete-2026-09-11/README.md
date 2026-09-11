@@ -1,6 +1,6 @@
 # Android companion integration candidate — 2026-09-11
 
-Status: **not end-to-end accepted; not installed or published**.
+Status: **Android 14 emulator fixture accepted; real desktop chain and release pending**.
 
 This candidate starts from the owner-confirmed UI branch at `45241be`, retaining the four attachment/source actions, fully expanded active projects without search, keyboard insets and light/dark appearance. It transplants connection recovery from `32f2fcb` without restoring the old placeholder UI or separate send socket.
 
@@ -17,19 +17,20 @@ Desktop counterpart: `/Users/apple/.codex/worktrees/cunzhi-android-companion-com
 ## Validation performed
 
 - `:app:testDebugUnitTest`: 26 tests pass (9 recovery, 7 parser, 3 voice, 5 enrollment, 2 authenticated HTTP/reply).
-- `:app:assembleDebug`: successful. No release signing or installation claim.
+- `:app:assembleDebug` and test APK build: successful. Installed only in a read-only Android 14 emulator overlay; no production signing or physical-phone installation.
 - Desktop reply journal: 3 tests pass in a small Cargo harness importing the actual source module (replay, conflicting payload, interrupted/corrupt receipt). This is **not** a full desktop build or route integration test.
 - Source diff whitespace check passes.
-- Headless Android 14 emulator start failed explicitly at `hasSufficientDiskSpace`; only approximately 1.4 GB remained. No device/runtime acceptance performed for this candidate.
+- Emulator startup initially failed for disk space. After the existing storage guard reclaimed caches, the original AVD booted with a read-only overlay. Ten instrumentation tests pass: eight accepted UI regressions, corrupt pending-record protection, and a real Activity/Keystore/foreground-service/system-notification/reply-retry test against an in-process MockWebServer fixture. Notification acceptance uses a real notification shade click and verifies the exact request is visible. HTTP 503 then success preserves the operation ID. This does not establish live-desktop compatibility, Doze or overnight reliability.
+- Fixed unpaired network-loss status and preserved unreadable pending-record presence so startup cannot silently overwrite a damaged reply.
 
 ## Outstanding before claiming completion
 
-1. Restore sufficient build storage (approximately 20 GB free requested); compile and test the full desktop candidate, including native auth, iOS pairing regression and reply-route authorization/deduplication.
+1. Full desktop candidate build/test is running in owner-authorized private CI at https://github.com/kexin94yyds/iterate/actions/runs/34612276914. Verify native auth, iOS pairing regression and reply-route authorization/deduplication.
 2. Independent read-only review when the owner authorizes a reviewer; no subagent has been started.
-3. Install and verify the Android candidate in a working emulator/device; test Keystore restart, service Stop/restart, notification permission/click, switch of pairing, and pending reply recovery.
+3. Extend emulator acceptance to full process death/restart, pairing changes and network transitions; fixture coverage currently verifies Keystore reread, service Stop, notification click and same-ID transport retry.
 4. Test the real authenticated desktop chain, project/file/image access and reply receipt. Current desktop installation is unchanged and still rejects Android claims.
 5. Verify network loss, screen-off/Doze, process reclaim and overnight behavior on the intended physical phone. No physical Android is currently attached.
 6. Select/configure the actual system push channel and server integration. JPush/OEM/FCM accounts/configuration are not available in this task. Stream-generated local notifications do not replace provider push when Android stops the app.
-7. Relay-only enrollment, public release support matrix, production signing, release/merge/push remain pending.
+7. Relay-only enrollment, public release support matrix, production signing and release/merge remain pending. Only the desktop private candidate has push authorization; the Android candidate remains local.
 
 No private pairing grant, bearer, credentials, production task or account was used in the unit tests. Debug-only loopback parsing is enabled solely for local fixture testing; release pairing requires HTTPS/WSS.

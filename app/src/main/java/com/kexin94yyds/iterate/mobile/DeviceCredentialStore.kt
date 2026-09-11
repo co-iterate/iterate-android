@@ -34,6 +34,7 @@ class DeviceCredentialStore(context: Context) {
     val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
     check(prefs.edit().putString(name, Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)).commit()) { "无法保存数据，请重试" }
   }
+  fun hasSecret(name: String): Boolean = prefs.contains(name)
   fun readSecret(name: String): String? {
     val saved = prefs.getString(name, null) ?: return null
     val bytes = Base64.decode(saved, Base64.NO_WRAP)
