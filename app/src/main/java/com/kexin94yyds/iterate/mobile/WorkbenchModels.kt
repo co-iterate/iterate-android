@@ -8,7 +8,13 @@ enum class WorkbenchRoute {
 enum class BridgeConnectionState {
   Connecting,
   Connected,
+  Retrying,
   Offline,
+}
+
+sealed interface BridgeEvent {
+  data class Connection(val state: BridgeConnectionState, val error: String? = null) : BridgeEvent
+  data class RequestReceived(val request: MobileRequest) : BridgeEvent
 }
 
 enum class VoiceInputState {
@@ -48,6 +54,7 @@ data class WorkbenchUiState(
     get() = when (connectionState) {
       BridgeConnectionState.Connected -> "已连接"
       BridgeConnectionState.Connecting -> "连接中"
+      BridgeConnectionState.Retrying -> "重连中"
       BridgeConnectionState.Offline -> "离线"
     }
 }
