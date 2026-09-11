@@ -1,0 +1,34 @@
+{
+  "beforeClose": {
+    "phase": "foreground-return",
+    "started": "2026-09-11T08:15:49.589Z",
+    "connectionCount": 1,
+    "messageCount": 13,
+    "connections": [
+      {
+        "id": 1,
+        "openedAt": "2026-09-11T08:20:55.039Z",
+        "pings": 10,
+        "pongs": 10,
+        "open": true
+      }
+    ]
+  },
+  "afterClose": {
+    "phase": "controlled-disconnect",
+    "started": "2026-09-11T08:15:49.589Z",
+    "connectionCount": 1,
+    "messageCount": 14,
+    "connections": [
+      {
+        "id": 1,
+        "openedAt": "2026-09-11T08:20:55.039Z",
+        "pings": 10,
+        "pongs": 10,
+        "closedAt": "2026-09-11T08:26:36.933Z",
+        "open": false
+      }
+    ]
+  },
+  "reconnectedWithin60Seconds": false
+}
