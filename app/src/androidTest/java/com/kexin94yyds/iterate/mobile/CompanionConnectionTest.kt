@@ -74,8 +74,12 @@ class CompanionConnectionTest {
         "/api/mobile/reply" -> {
           assertEquals("Bearer instrumented-private-fixture",request.getHeader("Authorization"))
           val body = JSONObject(request.body.readUtf8()); actions.add(body)
-          if (counter.getAndIncrement() == 0) MockResponse().setResponseCode(503)
-          else MockResponse().setBody(JSONObject().put("operation_id",body.getString("operation_id")).put("status","delivered").toString())
+          when (counter.getAndIncrement()) {
+            0 -> MockResponse().setResponseCode(503)
+            1 -> MockResponse().setResponseCode(408)
+            2 -> MockResponse().setResponseCode(429)
+            else -> MockResponse().setBody(JSONObject().put("operation_id",body.getString("operation_id")).put("status","delivered").toString())
+          }
         }
         else -> MockResponse().setResponseCode(404)
       }
@@ -123,8 +127,9 @@ class CompanionConnectionTest {
           assertFalse(manager.queueReply(JSONObject().put("action","submit")))
         }
         eventually { !manager.state.value.pendingReply && manager.state.value.replyStatus == "电脑已收到回复" }
-        assertEquals(2,actions.size)
-        assertEquals(actions[0].getString("operation_id"),actions[1].getString("operation_id"))
+        assertEquals(4,actions.size)
+        assertEquals(1,actions.map { it.getString("operation_id") }.distinct().size)
+        assertEquals(1,sockets.size)
         assertNull(identity.readSecret("pending_reply"))
         instrumentation.runOnMainSync { app.startService(Intent(app,ConnectionService::class.java).setAction(ConnectionService.STOP)) }
         eventually { !prefs.getBoolean("continuous",true) }

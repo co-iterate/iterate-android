@@ -8,17 +8,25 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.kexin94yyds.iterate.BuildConfig
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 @Composable
 fun ConnectionSettings(initialPayload: String = "", onBack: () -> Unit) {
@@ -30,11 +38,35 @@ fun ConnectionSettings(initialPayload: String = "", onBack: () -> Unit) {
   var busy by remember { mutableStateOf(false) }
   var error by remember { mutableStateOf<String?>(null) }
   var continuous by remember { mutableStateOf(preferences.getBoolean("continuous", false)) }
+  var draftKeys by remember { mutableStateOf(emptyList<String>()) }
+  var selectedDraft by remember { mutableStateOf<String?>(null) }
+  var draft by remember { mutableStateOf<JSONObject?>(null) }
+  var draftError by remember { mutableStateOf<String?>(null) }
+  var deleteDraft by remember { mutableStateOf<String?>(null) }
   val scope = rememberCoroutineScope()
   val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
     if (!granted) error = "通知未开启，可在系统设置中允许电脑消息提醒"
   }
   LaunchedEffect(initialPayload) { if (initialPayload.isNotBlank()) content = initialPayload }
+  LaunchedEffect(snapshot.draftRevision) { draftKeys = withContext(Dispatchers.IO) { manager.replyDraftKeys() } }
+  LaunchedEffect(selectedDraft, snapshot.draftRevision) {
+    draft = null; draftError = null
+    selectedDraft?.let { key ->
+      val result = withContext(Dispatchers.IO) { runCatching { manager.readReplyDraft(key) } }
+      draft = result.getOrNull()
+      if (draft == null) draftError = "这条草稿无法读取，原记录仍保留"
+    }
+  }
+  deleteDraft?.let { key ->
+    AlertDialog(onDismissRequest = { deleteDraft = null }, title = { Text("删除保存的草稿？") },
+      text = { Text("这会删除草稿中保存的文字、选项和图片，无法恢复。请先复制需要的内容。") },
+      confirmButton = { TextButton(onClick = {
+        try { manager.deleteReplyDraft(key); if (selectedDraft == key) selectedDraft = null }
+        catch (_: Exception) { error = "草稿删除失败，请重试" }
+        deleteDraft = null
+      }) { Text("删除") } },
+      dismissButton = { TextButton(onClick = { deleteDraft = null }) { Text("保留") } })
+  }
   Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
     Text("连接电脑", style = MaterialTheme.typography.headlineSmall)
     Text(manager.paired?.let { "已配对：${it.desktopName}" } ?: "在电脑 iterate 中打开手机连接，复制配对链接到这里。")
@@ -73,7 +105,19 @@ fun ConnectionSettings(initialPayload: String = "", onBack: () -> Unit) {
     Text("锁屏省电或系统停止应用可能暂停接收。重新打开应用会恢复连接；厂商推送尚未配置。", style = MaterialTheme.typography.bodySmall)
     if (snapshot.pendingReply) {
       Text(snapshot.replyStatus ?: "有一条待确认回复")
-      TextButton(onClick = { manager.discardPendingReply() }) { Text("放弃待发送回复") }
+      TextButton(onClick = { manager.savePendingReplyAsDraft()?.let { selectedDraft = it } }, modifier = Modifier.testTag("archive-pending-reply")) { Text("保留为草稿并停止重试") }
+    }
+    if (draftKeys.isNotEmpty()) {
+      Text("已保存的回复（${draftKeys.size}/10）", style = MaterialTheme.typography.titleMedium)
+      Text("草稿保留原电脑和任务信息，不会自动发送到当前连接。")
+      draftKeys.forEachIndexed { index, key ->
+        TextButton(onClick = { selectedDraft = if (selectedDraft == key) null else key }) { Text("查看草稿 ${index + 1}") }
+      }
+      selectedDraft?.let { key ->
+        draft?.let { ReplyDraftPreview(it) }
+        draftError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        TextButton(onClick = { deleteDraft = key }) { Text("删除这条草稿…") }
+      }
     }
     TextButton(onClick = { manager.reconnect() }, enabled = manager.paired != null) { Text("重新连接") }
     TextButton(onClick = {
@@ -81,5 +125,34 @@ fun ConnectionSettings(initialPayload: String = "", onBack: () -> Unit) {
       manager.forget()
     }, enabled = manager.paired != null) { Text("解除本机配对") }
     Button(onClick = onBack) { Text("返回消息") }
+  }
+}
+
+@Composable
+private fun ReplyDraftPreview(record: JSONObject) {
+  val payload = record.optJSONObject("payload") ?: return
+  val clipboard = LocalClipboardManager.current
+  val text = payload.optString("user_input")
+  val options = payload.optJSONArray("selected_options")?.let { array ->
+    (0 until array.length()).map { array.optString(it) }.joinToString("\n")
+  }.orEmpty()
+  Text("原电脑：${record.optString("desktop", record.optString("base"))}")
+  Text("原项目：${payload.optString("project_path")}")
+  Text("原请求：${payload.optString("request_id")}")
+  SelectionContainer { Text(listOf(text, options).filter { it.isNotBlank() }.joinToString("\n"), modifier = Modifier.testTag("saved-reply-text")) }
+  TextButton(onClick = { clipboard.setText(AnnotatedString(listOf(text, options).filter { it.isNotBlank() }.joinToString("\n"))) }) { Text("复制文字和选项") }
+  val images = payload.optJSONArray("images")
+  if (images != null) for (index in 0 until images.length()) {
+    val item = images.optJSONObject(index) ?: continue
+    val data = item.optString("data")
+    val bitmap = remember(data) {
+      runCatching {
+        require(data.startsWith("data:image/") && data.contains(','))
+        val bytes = android.util.Base64.decode(data.substringAfter(','), android.util.Base64.DEFAULT)
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+      }.getOrNull()
+    }
+    if (bitmap != null) Image(bitmap, contentDescription = item.optString("filename", "保存的图片"), modifier = Modifier.fillMaxWidth().height(160.dp))
+    else Text("图片 ${index + 1} 无法预览，原数据仍保存在草稿中")
   }
 }

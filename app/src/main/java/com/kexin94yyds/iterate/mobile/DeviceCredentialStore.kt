@@ -43,6 +43,28 @@ class DeviceCredentialStore(context: Context) {
     return String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
   }
   fun removeSecret(name: String) { check(prefs.edit().remove(name).commit()) }
+  fun replyDraftKeys(): List<String> = prefs.all.keys.filter { it.startsWith("reply_draft_") }.sorted()
+  fun readReplyDraft(name: String): String? {
+    require(name.startsWith("reply_draft_"))
+    return readSecret(name)
+  }
+  fun deleteReplyDraft(name: String) {
+    require(name.startsWith("reply_draft_"))
+    removeSecret(name)
+  }
+  fun archivePendingReply(): String {
+    val encrypted = prefs.getString("pending_reply", null) ?: error("待发送记录不存在")
+    check(replyDraftKeys().size < 10) { "已保存 10 条草稿，请先查看并删除不再需要的草稿；待发送内容仍保留" }
+    val name = "reply_draft_${UUID.randomUUID()}"
+    // Move the original ciphertext atomically, including unreadable records. No plaintext or
+    // pairing credentials are copied into a second store, and old drafts are never overwritten.
+    if (!prefs.edit().putString(name, encrypted).remove("pending_reply").commit()) {
+      // commit() also changes the in-memory map on failure; keep the original pending record.
+      prefs.edit().putString("pending_reply", encrypted).remove(name).commit()
+      error("草稿保存失败，待发送内容仍保留")
+    }
+    return name
+  }
   fun load(): PairedConnection? {
     val saved = readSecret("credential") ?: return null
     val json = JSONObject(saved)

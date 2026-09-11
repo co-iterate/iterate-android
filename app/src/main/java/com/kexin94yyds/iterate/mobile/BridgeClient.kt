@@ -148,6 +148,7 @@ class BridgeClient(
     ).execute().use { response ->
       if (response.code == 404) throw ReplyUnsupported()
       if (response.code == 401 || response.code == 403) throw ReplyUnauthorized()
+      if (response.code == 408 || response.code == 429) throw IOException("reply temporarily unavailable")
       if (response.code in 400..499) throw ReplyRejected()
       if (!response.isSuccessful) throw IOException("reply temporarily unavailable")
       org.json.JSONObject(response.body?.string().orEmpty())

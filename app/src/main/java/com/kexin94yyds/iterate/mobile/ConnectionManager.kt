@@ -23,7 +23,7 @@ class ConnectionManager private constructor(context: Context) {
     private set
   var paired: PairedConnection? = null
     private set
-  data class Snapshot(val state: BridgeConnectionState = BridgeConnectionState.Unpaired, val request: MobileRequest? = null, val error: String? = null, val replyStatus: String? = null, val pendingReply: Boolean = false)
+  data class Snapshot(val state: BridgeConnectionState = BridgeConnectionState.Unpaired, val request: MobileRequest? = null, val error: String? = null, val replyStatus: String? = null, val pendingReply: Boolean = false, val draftRevision: Int = 0)
   private val mutable = MutableStateFlow(Snapshot())
   val state: StateFlow<Snapshot> = mutable
   private val callback = object : ConnectivityManager.NetworkCallback() {
@@ -85,7 +85,7 @@ class ConnectionManager private constructor(context: Context) {
     if (mutable.value.pendingReply) return false
     val operation = java.util.UUID.randomUUID().toString()
     payload.put("operation_id", operation)
-    val record = org.json.JSONObject().put("base", identity.baseUrl).put("identity", identityDigest(identity))
+    val record = org.json.JSONObject().put("base", identity.baseUrl).put("desktop", identity.desktopName).put("identity", identityDigest(identity))
       .put("payload", payload)
     try { store.writeSecret("pending_reply", record.toString()) }
     catch (_: Exception) { mutable.value = mutable.value.copy(replyStatus = "无法保存回复，内容仍在输入框中"); return false }
@@ -95,7 +95,24 @@ class ConnectionManager private constructor(context: Context) {
   }
   fun discardPendingReply() {
     replyJob?.cancel(); replyJob = null; store.removeSecret("pending_reply")
-    mutable.value = mutable.value.copy(pendingReply = false, replyStatus = "已放弃待发送回复，输入内容保留")
+    mutable.value = mutable.value.copy(pendingReply = false, replyStatus = "已删除待发送回复")
+  }
+  fun savePendingReplyAsDraft(): String? {
+    replyJob?.cancel(); replyJob = null
+    return try {
+      val key = store.archivePendingReply()
+      mutable.value = mutable.value.copy(pendingReply = false, replyStatus = "已保留为草稿，不再自动重试；已发出的请求仍可能到达电脑", draftRevision = mutable.value.draftRevision + 1)
+      key
+    } catch (error: Exception) {
+      mutable.value = mutable.value.copy(replyStatus = error.message ?: "草稿保存失败，待发送内容仍保留")
+      null
+    }
+  }
+  fun replyDraftKeys(): List<String> = store.replyDraftKeys()
+  fun readReplyDraft(key: String): org.json.JSONObject? = store.readReplyDraft(key)?.let { org.json.JSONObject(it) }
+  fun deleteReplyDraft(key: String) {
+    store.deleteReplyDraft(key)
+    mutable.value = mutable.value.copy(draftRevision = mutable.value.draftRevision + 1)
   }
   private fun identityDigest(identity: PairedConnection): String = java.security.MessageDigest.getInstance("SHA-256")
     .digest((identity.deviceId + ":" + identity.token).toByteArray()).joinToString("") { "%02x".format(it) }
@@ -121,7 +138,7 @@ class ConnectionManager private constructor(context: Context) {
                 store.removeSecret("pending_reply")
                 mutable.value = mutable.value.copy(pendingReply = false, replyStatus = "电脑已收到回复")
               }
-              "rejected" -> mutable.value = mutable.value.copy(replyStatus = "电脑已拒绝回复，原请求可能已结束。请检查后放弃待发送回复")
+              "rejected" -> mutable.value = mutable.value.copy(replyStatus = "电脑已拒绝回复，原请求可能已结束。可保留为草稿后查看内容")
               else -> mutable.value = mutable.value.copy(replyStatus = "电脑尚不能确认是否已处理，请检查电脑后再决定；不会重复执行")
             }
             return@launch

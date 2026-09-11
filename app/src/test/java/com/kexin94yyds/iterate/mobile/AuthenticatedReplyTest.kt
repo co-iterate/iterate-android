@@ -8,6 +8,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AuthenticatedReplyTest {
+  @Test fun transientClientStatusesRemainRetryable() = runBlocking {
+    val server = MockWebServer().apply { start() }
+    try {
+      val base = server.url("/").toString().trimEnd('/')
+      for (status in listOf(408, 429)) {
+        server.enqueue(MockResponse().setResponseCode(status))
+        val error = runCatching { BridgeClient(base,"$base/ws","fixture-token").sendReply(JSONObject()) }.exceptionOrNull()
+        assertTrue(error is java.io.IOException)
+        assertFalse(error is BridgeClient.ReplyRejected)
+      }
+    } finally { server.shutdown() }
+  }
   @Test fun replyUsesPairedBearerAndRetainsOperationIdentity() = runBlocking {
     val server = MockWebServer().apply { start() }
     try {
