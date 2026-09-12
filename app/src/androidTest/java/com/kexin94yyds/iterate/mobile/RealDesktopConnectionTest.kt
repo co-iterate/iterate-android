@@ -15,6 +15,17 @@ import java.io.File
 
 /** Opt-in only: the owner must issue a fresh pairing offer through the normal desktop UI. */
 class RealDesktopConnectionTest {
+  @Test fun probeConfiguredHttpsEndpoint() {
+    val base = InstrumentationRegistry.getArguments().getString("desktop_base_url")
+    assumeTrue("requires an explicitly selected public desktop endpoint", base != null)
+    require(java.net.URI(base).scheme == "https")
+    val client = okhttp3.OkHttpClient.Builder()
+      .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+      .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+      .callTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build()
+    val version = runBlocking { BridgeClient(base!!, base.replace("https://", "wss://") + "/ws", client = client).checkVersion() }
+    assertTrue(JSONObject(version).optString("version").isNotBlank())
+  }
   @Test fun pairThroughTheOwnersFreshOffer() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val app = instrumentation.targetContext
