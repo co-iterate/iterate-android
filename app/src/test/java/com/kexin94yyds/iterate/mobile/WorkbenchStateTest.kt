@@ -255,7 +255,7 @@ class WorkbenchStateTest {
   }
 
   @Test
-  fun closeBeforeUnknownAckRestoresConversationAndOriginalDraft() {
+  fun closeBeforeUnknownAckKeepsTabClosedAndPreservesOriginalReply() {
     val first = request("req-1", "E:\\project")
     val other = request("req-2", "E:\\project")
     val pending = WorkbenchUiState(
@@ -275,10 +275,18 @@ class WorkbenchStateTest {
     assertEquals(null, uncertain.pendingAction)
     assertEquals(false, uncertain.sending)
     assertEquals(true, uncertain.actionNotice?.contains("核对原窗口"))
-    assertEquals(listOf(first, other), uncertain.requests)
-    assertEquals(first, uncertain.request)
-    assertEquals("请继续", uncertain.userInput)
-    assertEquals(setOf("继续"), uncertain.selectedOptions)
+    assertEquals(listOf(other), uncertain.requests)
+    assertEquals(other, uncertain.request)
+    assertEquals("另一条草稿", uncertain.userInput)
+    assertEquals(emptySet<String>(), uncertain.selectedOptions)
+    val originalKey = "req-1" to "E:\\project"
+    val originalDraft = uncertain.drafts[originalKey]
+    assertEquals(setOf("继续"), originalDraft?.selectedOptions)
+    assertEquals("action-1", originalDraft?.unconfirmedAction?.clientActionId)
+    assertEquals(first, originalDraft?.requestSnapshot)
+    assertEquals(true, originalDraft?.deliveryUnknown)
+    assertEquals(true, originalKey in uncertain.closedRequestKeys)
+    assertEquals(uncertain, uncertain.receiveRequest(first))
     assertEquals(WorkbenchRoute.Conversation, uncertain.route)
     assertEquals("另一条草稿", uncertain.selectActiveRequest(other).userInput)
 

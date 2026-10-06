@@ -161,4 +161,81 @@ class BridgeJsonParserTest {
     assertEquals("请看图\n\n然后回复", BridgeJsonParser.messageWithoutImages(message))
     assertEquals(emptyList<MobileImage>(), BridgeJsonParser.parseMessageImages("![私有路径](/image?path=C:/secret.png)"))
   }
+
+  @Test
+  fun jsonNullOptionalRequestMetadataUsesDefaultsAndOriginalRoute() {
+    val state = """{"message_type":"mcp_state","payload":{"source":null,"timeline_route_id":null,"conversation_id":null,"request":{"id":"req-null","message":"  null\n正文  ","project_path":"E:\\A","conversation_title":null,"codex_thread_id":null,"codex_thread_provenance":null,"browser_ai_response":null,"timeline_route_id":null,"metadata":{"codex_thread_id":null},"predefined_options":["null","继续"]}}}"""
+    val request = BridgeJsonParser.parseRequest(state)!!
+    assertEquals("req-null", request.requestId)
+    assertEquals("req-null", request.timelineRouteId)
+    assertEquals("未命名弹窗", request.conversationTitle)
+    assertEquals(RequestOrigin.Mcp, request.origin)
+    assertNull(request.codexThreadId)
+    assertNull(request.codexThreadProvenance)
+    assertNull(request.browserAiResponse)
+    assertNull(request.conversationId)
+    assertEquals("  null\n正文  ", request.message)
+    assertEquals(listOf("null", "继续"), request.predefinedOptions)
+  }
+
+  @Test
+  fun jsonNullPreferredFieldAllowsExistingAliasAndMetadataFallback() {
+    val state = """{"message_type":"mcp_state","payload":{"timeline_route_id":null,"request":{"request_id":null,"requestId":null,"id":"req-alias","message":"正文","project_path":null,"projectPath":"E:\\A","conversation_title":null,"conversationTitle":"有效标题","browser_ai_response":null,"browserAiResponse":"有效补充","codex_thread_id":null,"codexThreadId":null,"metadata":{"codex_thread_id":"real-thread"},"timeline_route_id":"real-route"}}}"""
+    val request = BridgeJsonParser.parseRequest(state)!!
+    assertEquals("req-alias", request.requestId)
+    assertEquals("E:\\A", request.projectPath)
+    assertEquals("有效标题", request.conversationTitle)
+    assertEquals("有效补充", request.browserAiResponse)
+    assertEquals("real-thread", request.codexThreadId)
+    assertEquals("real-route", request.timelineRouteId)
+  }
+
+  @Test
+  fun literalNullStringsArePreservedInMetadataAndIdentities() {
+    val state = """{"message_type":"mcp_state","payload":{"timeline_route_id":"null","conversation_id":"null","request":{"id":"null","project_path":"null","message":"null","conversation_title":"null","codex_thread_id":"null","codex_thread_provenance":"null","browser_ai_response":"null","predefined_options":["null"]}}}"""
+    val request = BridgeJsonParser.parseRequest(state)!!
+    assertEquals("null", request.requestId)
+    assertEquals("null", request.projectPath)
+    assertEquals("null", request.conversationTitle)
+    assertEquals("null", request.timelineRouteId)
+    assertEquals("null", request.conversationId)
+    assertEquals("null", request.codexThreadId)
+    assertEquals("null", request.codexThreadProvenance)
+    assertEquals("null", request.browserAiResponse)
+    assertEquals("null", request.message)
+    assertEquals(listOf("null"), request.predefinedOptions)
+  }
+
+  @Test
+  fun nullCloseIdentityCannotTargetAQuestionButLiteralStringStillCan() {
+    val state = """{"message_type":"mcp_state","payload":{"request":null,"showMcpPopup":false,"request_id":null,"project_path":"E:\\A"}}"""
+    assertNull(BridgeJsonParser.parseClosedRequest(state))
+    assertNull(BridgeJsonParser.parseClosedRequest(state.replace("\"request_id\":null", "\"request_id\":\"req-a\"").replace("\"project_path\":\"E:\\\\A\"", "\"project_path\":null")))
+    assertEquals("null" to "E:\\A", BridgeJsonParser.parseClosedRequest(state.replace("\"request_id\":null", "\"request_id\":\"null\"")))
+  }
+
+  @Test
+  fun nullTimelineIdentityFallsBackAndMissingRequiredIdentityIsRejected() {
+    val state = """{"message_type":"mcp_state","payload":{"timeline_route_id":null,"request_id":"req-a","project_path":null,"conversation_id":"conversation-a","request":{"project_path":"E:\\A","timeline_route_id":null},"timelineNodes":[{"id":"node-a","parent_id":null,"node_type":"user","content":"null","metadata":{"run_id":null}},{"id":null,"node_type":"assistant","content":"ignore"}]}}"""
+    val update = BridgeJsonParser.parseTimeline(state)!!
+    assertEquals("req-a", update.routeId)
+    assertEquals("E:\\A", update.projectPath)
+    assertEquals(1, update.nodes.size)
+    assertNull(update.nodes.single().parentId)
+    assertNull(update.nodes.single().eventId)
+    assertEquals("null", update.nodes.single().content)
+    assertNull(BridgeJsonParser.parseTimeline(state.replace("\"conversation_id\":\"conversation-a\"", "\"conversation_id\":null")))
+    assertNull(BridgeJsonParser.parseTimeline(state.replace("\"request_id\":\"req-a\"", "\"request_id\":null")))
+  }
+
+  @Test
+  fun nullSourceDoesNotInventNativeTrustOrReplaceLiteralSource() {
+    val state = """{"message_type":"mcp_state","payload":{"source":null,"request":{"id":"native-codex:a","source":"codex_native","message":"正文","codex_thread_id":"native-cli:a"}}}"""
+    assertEquals(RequestOrigin.Native, BridgeJsonParser.parseRequest(state)?.origin)
+    assertNull(BridgeJsonParser.parseRequest(state.replace("\"source\":\"codex_native\"", "\"source\":null")))
+    assertNull(BridgeJsonParser.parseRequest(state.replace("\"source\":null", "\"source\":\"null\"")))
+    assertNull(BridgeJsonParser.parseRequest(state.replace("native-codex:a", "ordinary-a")))
+    val timeline = """{"message_type":"timeline_sync_snapshot","payload":{"source":null,"timeline_route_id":"native-cli:a","project_path":"E:\\A","conversation_id":"conversation-a","timelineNodes":[]}}"""
+    assertNull(BridgeJsonParser.parseTimeline(timeline))
+  }
 }

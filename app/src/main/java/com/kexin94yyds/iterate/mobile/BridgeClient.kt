@@ -3,6 +3,7 @@ package com.kexin94yyds.iterate.mobile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
@@ -26,6 +27,9 @@ sealed interface BridgeEvent {
   data class Request(val request: MobileRequest) : BridgeEvent
   data class RequestClosed(val requestId: String, val projectPath: String) : BridgeEvent
   data class QuickTemplates(val snapshot: QuickTemplateSnapshot) : BridgeEvent
+  data class ActionResult(val text:String):BridgeEvent
+  data class Timeline(val update: MobileTimelineUpdate):BridgeEvent
+  data class NativeHistories(val sessions: List<NativeHistorySession>):BridgeEvent
   data class Disconnected(val reason: String) : BridgeEvent
 }
 
@@ -40,6 +44,12 @@ class BridgeClient(
   fun requestQuickTemplateSync(syncReason: String): Boolean = receiveSocket?.send(
     JSONObject().put("message_type", "request_sync")
       .put("payload", JSONObject().put("sync_reason", syncReason)).toString()
+  ) == true
+
+  fun requestTimeline(routeId: String, projectPath: String): Boolean = receiveSocket?.send(
+    JSONObject().put("message_type", "request_timeline_sync")
+      .put("payload", JSONObject().put("request_id", routeId).put("project_path", projectPath))
+      .toString()
   ) == true
 
   suspend fun loadImage(pairing: SavedPairing, source: String): ByteArray = withContext(Dispatchers.IO) {
@@ -73,6 +83,15 @@ class BridgeClient(
     val request = authenticatedRequest(pairing.wsUrl, pairing).build()
     val flowClosed = AtomicBoolean(false)
     val initialSyncReason = "android_connect:${UUID.randomUUID()}"
+    // OkHttp invokes these callbacks on its worker thread. Backpressure keeps a
+    // reconnect snapshot from silently dropping requests when the UI is slower.
+    fun emitEvent(event: BridgeEvent) = trySendBlocking(event).isSuccess
+    fun disconnected(webSocket: WebSocket, reason: String) {
+      if (!flowClosed.compareAndSet(false, true)) return
+      if (receiveSocket === webSocket) receiveSocket = null
+      emitEvent(BridgeEvent.Disconnected(reason))
+      close()
+    }
     val socket = client.newWebSocket(request, object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
         if (flowClosed.get()) {
@@ -80,7 +99,10 @@ class BridgeClient(
           return
         }
         receiveSocket = webSocket
-        trySend(BridgeEvent.Connected(initialSyncReason))
+        if (!emitEvent(BridgeEvent.Connected(initialSyncReason))) {
+          webSocket.cancel()
+          return
+        }
         webSocket.send(JSONObject()
           .put("message_type", "client_hello")
           .put("payload", JSONObject()
@@ -94,24 +116,29 @@ class BridgeClient(
       }
 
       override fun onMessage(webSocket: WebSocket, text: String) {
-        BridgeJsonParser.parseQuickTemplates(text)?.let { trySend(BridgeEvent.QuickTemplates(it)) }
+        if(runCatching{JSONObject(text).optString("message_type") in listOf("mcp_action_result", "cross_device_mirror_action_result")}.getOrDefault(false)){emitEvent(BridgeEvent.ActionResult(text));return}
+        BridgeJsonParser.parseNativeHistorySessions(text)?.let { emitEvent(BridgeEvent.NativeHistories(it)); return }
+        BridgeJsonParser.parseTimeline(text)?.let { emitEvent(BridgeEvent.Timeline(it)) }
+        BridgeJsonParser.parseQuickTemplates(text)?.let { emitEvent(BridgeEvent.QuickTemplates(it)) }
         BridgeJsonParser.parseClosedRequest(text)?.let {
-          trySend(BridgeEvent.RequestClosed(it.first, it.second))
+          emitEvent(BridgeEvent.RequestClosed(it.first, it.second))
           return
         }
-        BridgeJsonParser.parseRequest(text)?.let { trySend(BridgeEvent.Request(it)) }
+        BridgeJsonParser.parseRequest(text)?.let { emitEvent(BridgeEvent.Request(it)) }
+      }
+
+      override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+        // A peer Close can have the synthetic code 1005; never echo that code.
+        webSocket.close(1000, "android_peer_closed")
+        disconnected(webSocket, "连接已断开 ($code)")
       }
 
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        if (receiveSocket === webSocket) receiveSocket = null
-        trySend(BridgeEvent.Disconnected(if (response?.code == 401) "配对凭据已失效" else "连接失败：${response?.code ?: t.javaClass.simpleName}"))
-        close()
+        disconnected(webSocket, if (response?.code == 401) "配对凭据已失效" else "连接失败：${response?.code ?: t.javaClass.simpleName}")
       }
 
       override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-        if (receiveSocket === webSocket) receiveSocket = null
-        trySend(BridgeEvent.Disconnected("连接已断开 ($code)"))
-        close()
+        disconnected(webSocket, "连接已断开 ($code)")
       }
     })
     awaitClose {
@@ -146,7 +173,7 @@ class BridgeClient(
     client.newCall(request).execute().use { it.isSuccessful }
   }
 
-  suspend fun sendAction(pairing: SavedPairing, json: String, requestId: String, projectPath: String, actionId: String, action: String): ActionReceipt = withContext(Dispatchers.IO) {
+  suspend fun sendAction(pairing: SavedPairing, json: String, requestId: String, projectPath: String, actionId: String, action: String, origin: RequestOrigin = RequestOrigin.Mcp): ActionReceipt = withContext(Dispatchers.IO) {
     val result = CompletableDeferred<ActionReceipt>()
     val submitted = AtomicBoolean(false)
     val request = authenticatedRequest(pairing.wsUrl, pairing).build()
@@ -157,8 +184,12 @@ class BridgeClient(
       }
 
       override fun onMessage(webSocket: WebSocket, text: String) {
-        val receipt = BridgeJsonParser.parseActionReceipt(text, requestId, projectPath, actionId, action)
-        if (receipt != null) result.complete(receipt)
+        val receipt = BridgeJsonParser.parseActionReceipt(text, requestId, projectPath, actionId, action, origin)
+        if (receipt == null) return
+        // The hub acknowledges queueing before the desktop finishes. Treating
+        // that interim receipt as failure would reopen the just-submitted tab.
+        if (JSONObject(text).getJSONObject("payload").optString("status") == "pending") return
+        result.complete(receipt)
       }
 
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -191,6 +222,7 @@ class BridgeClient(
     val request = authenticatedRequest("${pairing.baseUrl}/api/open-codex-chat", pairing).post(body).build()
     runCatching { client.newCall(request).execute().use { it.isSuccessful && JSONObject(it.body?.string().orEmpty()).optBoolean("ok") } }.getOrDefault(false)
   }
+
 
   private fun authenticatedRequest(url: String, pairing: SavedPairing): Request.Builder =
     Request.Builder().url(url)
