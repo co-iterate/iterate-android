@@ -34,7 +34,6 @@ fun ConnectionScreen(
     Text("iterate · Android")
     Text(if (state.paired) "电脑连接：${state.connectionLabel}" else "请用手机扫码电脑上的 Android 配对码")
     state.bridgeError?.let { Text(it) }
-    state.actionNotice?.let { Text(it) }
     if (!state.paired) {
       Text("手机相机识别二维码后打开 iterate；也可粘贴完整配对链接。")
       OutlinedTextField(

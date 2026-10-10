@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -16,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun AndroidMobileWorkbenchApp(
@@ -97,6 +101,14 @@ fun AndroidMobileWorkbenchApp(
         onSelectRequest = viewModel::selectRequest,
       )
       }
+      ActionNoticeHost(
+        notice = state.actionNotice,
+        onConsumed = viewModel::consumeActionNotice,
+        modifier = Modifier.align(Alignment.BottomCenter).imePadding()
+          .padding(horizontal = 24.dp)
+          .padding(bottom = if (state.paired && state.route == WorkbenchRoute.Conversation &&
+            (state.request != null || state.closedDraftKey != null)) 64.dp else 16.dp),
+      )
     }
   }
 }

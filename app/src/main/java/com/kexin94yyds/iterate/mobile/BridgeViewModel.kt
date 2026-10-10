@@ -50,6 +50,7 @@ class BridgeViewModel(
 
   fun showHome() { state = state.copy(route = WorkbenchRoute.Home) }
   fun showConversation() { state = state.copy(route = WorkbenchRoute.Conversation) }
+  fun consumeActionNotice(notice: String) { state = state.consumeActionNotice(notice) }
   fun setUserInput(value: String) {
     if (state.request == null || state.closedDraftKey!=null || state.sending || (state.request?.origin==RequestOrigin.Native&&state.drafts[state.request?.requestId to state.request?.projectPath]?.deliveryUnknown==true)) return
     state = state.copy(userInput = value)

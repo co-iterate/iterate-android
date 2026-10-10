@@ -296,25 +296,26 @@ internal fun WorkbenchUiState.receiveRequest(incoming: MobileRequest): Workbench
   val key = incoming.key() ?: return this
   if (incoming.origin == RequestOrigin.Mirror && incoming.requestId in terminalMirrorRequestIds) return this
   if (pendingAction?.key() == key) return this
-  if (key in closedRequestKeys && incoming.origin != RequestOrigin.Mirror) return this
+  if (key in closedRequestKeys && (incoming.origin != RequestOrigin.Mirror ||
+      drafts[key]?.unconfirmedAction != null)) return this
   val revisedDrafts = drafts[key]?.let { draft ->
     drafts + (key to draft.copy(selectedOptions = validOptions(draft.selectedOptions, incoming)))
   } ?: drafts
   val updated = copy(
-    requests = requests.filterNot { it.key() == key } + incoming,
+    requests = if (requests.any { it.key() == key })
+      requests.map { if (it.key() == key) incoming else it }
+    else requests + incoming,
     closedRequestKeys = if (incoming.origin == RequestOrigin.Mirror) closedRequestKeys - key else closedRequestKeys,
-    viewedTimelineRoute = if (request == null && closedDraftKey == null)
-      timelineRouteFor(incoming)
-    else viewedTimelineRoute,
     drafts = revisedDrafts,
   )
   val selected = request
   if (selected == null) {
-    if (keepConversationCollapsed || closedDraftKey != null) return updated
+    if (keepConversationCollapsed || closedDraftKey != null || historyBrowsing || viewedTimelineRoute != null) return updated
     val draft = revisedDrafts[key]
     return updated.copy(
       request = incoming,
       historyBrowsing = false,
+      viewedTimelineRoute = timelineRouteFor(incoming),
       userInput = draft?.text.orEmpty(),
       selectedOptions = draft?.selectedOptions.orEmpty(),
       actionNotice = if (draft?.deliveryUnknown == true) "上一条回复是否送达未知；请先核对电脑上的原窗口" else null,
@@ -322,7 +323,7 @@ internal fun WorkbenchUiState.receiveRequest(incoming: MobileRequest): Workbench
   }
   return if (selected.key() == key) updated.copy(
     request = incoming,
-    viewedTimelineRoute = timelineRouteFor(incoming),
+    viewedTimelineRoute = if (historyBrowsing) viewedTimelineRoute else timelineRouteFor(incoming),
     selectedOptions = validOptions(selectedOptions, incoming),
   ) else updated
 }
@@ -464,7 +465,10 @@ internal fun WorkbenchUiState.actionFailed(
   val savedDrafts = rememberCurrentDraft()
   val existing = savedDrafts[key]
   val pending = pendingAction?.takeIf { it.key() == key }
-  val closed = pending?.closeObserved == true || key in closedRequestKeys
+  val sourceClosed = pending?.closeObserved == true || key in closedRequestKeys
+  // A timeout is not a rejection. Keep the optimistically closed tab hidden
+  // while retaining the exact action and draft for an explicit receipt query.
+  val closed = sourceClosed || (pending != null && receipt.deliveryUnknown)
   val target = if(closed) null else requests.firstOrNull { it.key() == key } ?: pending?.requestSnapshot
     ?: request?.takeIf { it.key() == key }
   val originalText = pending?.text ?: if (request?.key() == key) userInput else existing?.text.orEmpty()
@@ -480,21 +484,17 @@ internal fun WorkbenchUiState.actionFailed(
     origin = pending?.origin ?: existing?.origin ?: RequestOrigin.Mcp,
     originalDeviceId = pending?.originalDeviceId ?: existing?.originalDeviceId,
   ))
-  val closeObserved = closed
-  val notice = if (closeObserved) {
+  val notice = if (sourceClosed) {
     "电脑上的请求已关闭，回复${if (receipt.deliveryUnknown) "送达状态未知" else "未被确认"}；请核对原窗口"
   } else receipt.error ?: "回复未送达"
   return copy(
-    route = if (target != null) WorkbenchRoute.Conversation else route,
-    keepConversationCollapsed = false,
-    request = target ?: request,
-    requests = if (target != null && requests.none { it.key() == key }) listOf(target) + requests else requests,
+    requests = if (target != null && requests.none { it.key() == key }) requests + target else requests,
     sending = false,
     pendingAction = null,
     drafts = updatedDrafts,
     closedRequestKeys = if(closed) closedRequestKeys + key else closedRequestKeys - key,
-    userInput = if (target != null) originalText else userInput,
-    selectedOptions = if (target != null) validOptions(originalOptions, target) else selectedOptions,
+    userInput = if (request?.key() == key) originalText else userInput,
+    selectedOptions = if (request?.key() == key) validOptions(originalOptions, request) else selectedOptions,
     actionNotice = notice,
   )
 }

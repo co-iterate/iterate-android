@@ -107,9 +107,6 @@ fun WorkbenchScreen(
           .padding(horizontal = 16.dp, vertical = 10.dp)
       ) {
         if (state.request != null) {
-          state.actionNotice?.let {
-            androidx.compose.material3.Text(it)
-          }
           MessageCard(request = state.request, onImageClick = onImageClick)
           key(state.request.requestId, state.request.projectPath) {
             InputSection(
