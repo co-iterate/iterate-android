@@ -2,38 +2,60 @@ package com.kexin94yyds.iterate.mobile
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-object IosParityColors {
-  val Background = Color(0xFFFAFAFB)
-  val Footer = Color(0xFFF7F8FA)
-  val Surface = Color(0xFFF8FAFC)
-  val SurfaceBorder = Color(0xFFE5E7EB)
-  val FocusBorder = Color(0xFFBFD7FF)
-  val Text = Color(0xFF1F2937)
-  val TextSecondary = Color(0xFF7B8494)
-  val IconCircle = Color(0xFFF1F3F7)
-  val Connected = Color(0xFF10B981)
-  val Warning = Color(0xFFF59E0B)
-  val PrimaryButton = Color(0xFF000000)
-}
-
-private val IosParityColorScheme = lightColorScheme(
-  primary = IosParityColors.PrimaryButton,
+private val lightScheme = lightColorScheme(
+  primary = Color.Black,
   onPrimary = Color.White,
-  surface = IosParityColors.Background,
-  onSurface = IosParityColors.Text,
-  surfaceVariant = IosParityColors.Surface,
-  onSurfaceVariant = IosParityColors.TextSecondary,
-  outline = IosParityColors.SurfaceBorder,
+  background = Color.White,
+  onBackground = Color(0xFF1F2937),
+  surface = Color(0xFFF3F4F6),
+  onSurface = Color(0xFF1F2937),
+  surfaceVariant = Color(0xFFF9FAFB),
+  onSurfaceVariant = Color(0xFF6B7280),
+  outline = Color(0xFFE5E7EB),
+  outlineVariant = Color(0xFFD1D5DB),
+  secondary = Color(0xFF3B82F6),
+  tertiary = Color(0xFF10B981),
 )
 
+private val darkScheme = darkColorScheme(
+  primary = Color.White,
+  onPrimary = Color.Black,
+  background = Color.Black,
+  onBackground = Color.White,
+  surface = Color(0xFF1A1A1A),
+  onSurface = Color.White,
+  surfaceVariant = Color(0xFF111111),
+  onSurfaceVariant = Color(0xFF9CA3AF),
+  outline = Color(0xFF333333),
+  outlineVariant = Color(0xFF444444),
+  secondary = Color(0xFF3B82F6),
+  tertiary = Color(0xFF10B981),
+)
+
+object IosParityColors {
+  val Background: Color @Composable get() = MaterialTheme.colorScheme.background
+  val Footer: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+  val Surface: Color @Composable get() = MaterialTheme.colorScheme.surface
+  val SurfaceBorder: Color @Composable get() = MaterialTheme.colorScheme.outline
+  val FocusBorder: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
+  val Text: Color @Composable get() = MaterialTheme.colorScheme.onBackground
+  val TextSecondary: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+  val IconCircle: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+  val Connected = Color(0xFF10B981)
+  val Warning = Color(0xFFF59E0B)
+  val PrimaryButton: Color @Composable get() = MaterialTheme.colorScheme.primary
+  val OnPrimaryButton: Color @Composable get() = MaterialTheme.colorScheme.onPrimary
+}
+
 @Composable
-fun AndroidMobileTheme(content: @Composable () -> Unit) {
+fun AndroidMobileTheme(lightAppearance: Boolean = true, content: @Composable () -> Unit) {
   MaterialTheme(
-    colorScheme = IosParityColorScheme,
+    colorScheme = if (lightAppearance) lightScheme else darkScheme,
     typography = Typography(),
     content = content,
   )
