@@ -188,7 +188,10 @@ class BridgeViewModel(
   }
 
   fun sendSubmit() { sendAction("submit") }
-  fun sendContinue() { sendAction("continue") }
+  fun sendContinue() {
+    state = state.prepareContinueReply() ?: return
+    sendAction("submit")
+  }
   fun sendGoal() { sendAction("goal") }
   fun setVoiceState(voiceState: VoiceInputState) { state = state.copy(voiceState = voiceState) }
 

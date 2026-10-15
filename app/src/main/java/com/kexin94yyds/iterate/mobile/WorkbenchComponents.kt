@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
@@ -48,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -72,12 +76,13 @@ fun WorkbenchHeader(
   onNewChatClick: () -> Unit,
   onProjectClick: () -> Unit,
   requestCount: Int,
+  request: MobileRequest? = null,
 ) {
   Column(
     modifier = Modifier
       .fillMaxWidth()
       .background(IosParityColors.Background)
-      .border(width = 0.5.dp, color = IosParityColors.SurfaceBorder)
+      .border(width = 0.5.dp, color = computerPlatformColor(request?.sourceComputerPlatform))
       .padding(horizontal = 12.dp, vertical = 10.dp),
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -143,6 +148,20 @@ fun HeaderIconButton(icon: ImageVector, label: String, action: () -> Unit) {
   }
 }
 
+@Composable
+internal fun computerPlatformColor(platform: SourceComputerPlatform?): Color = when (platform) {
+  SourceComputerPlatform.Windows -> Color(0xFF2563EB)
+  SourceComputerPlatform.Mac -> Color(0xFF8B5CF6)
+  null -> IosParityColors.SurfaceBorder
+}
+
+internal fun requestKindColor(origin: RequestOrigin): Color =
+  when (origin) {
+    RequestOrigin.Native -> Color(0xFFF59E0B)
+    RequestOrigin.Mcp -> Color(0xFF2563EB)
+    RequestOrigin.Mirror -> Color(0xFF8B5CF6)
+  }
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageCard(request: MobileRequest, onImageClick: (MobileImage) -> Unit) {
@@ -150,7 +169,7 @@ fun MessageCard(request: MobileRequest, onImageClick: (MobileImage) -> Unit) {
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(12.dp),
     color = IosParityColors.Surface,
-    border = BorderStroke(1.dp, IosParityColors.FocusBorder),
+    border = BorderStroke(1.dp, requestKindColor(request.origin)),
   ) {
     Column(modifier = Modifier.padding(16.dp)) {
       if (request.isMarkdown) {
@@ -246,6 +265,7 @@ fun InputSection(
   onOptionClick: (String) -> Unit,
   onInsertTemplate: (QuickTemplate) -> Unit,
   onRefreshTemplates: () -> Unit,
+  readOnly: Boolean = false,
 ) {
   var templatesExpanded by remember { mutableStateOf(false) }
   Spacer(Modifier.height(8.dp))
@@ -254,8 +274,22 @@ fun InputSection(
     onValueChange = onValueChange,
     modifier = Modifier.fillMaxWidth(),
     minLines = 3,
+    readOnly = readOnly,
     placeholder = { Text("输入回复...") },
   )
+  if (predefinedOptions.isNotEmpty()) {
+    Spacer(Modifier.height(6.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      predefinedOptions.forEach { option ->
+        SmallActionButton(
+          text = option,
+          selected = selectedOptions.contains(option),
+          enabled = !readOnly,
+          onClick = { if(!readOnly)onOptionClick(option) },
+        )
+      }
+    }
+  }
   Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     TextButton(onClick = { templatesExpanded = !templatesExpanded }, modifier = Modifier.weight(1f)) {
       Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -280,7 +314,7 @@ fun InputSection(
           shape = RoundedCornerShape(8.dp),
           color = IosParityColors.Background,
           border = BorderStroke(1.dp, IosParityColors.SurfaceBorder),
-          modifier = Modifier.heightIn(min = 40.dp).clickable { onInsertTemplate(template) },
+          modifier = Modifier.heightIn(min = 40.dp).clickable { if(!readOnly)onInsertTemplate(template) },
         ) {
           Text(template.name, fontSize = 14.sp, color = IosParityColors.Text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp))
@@ -289,34 +323,31 @@ fun InputSection(
     }
   }
   if (templateNotice != null) Text(templateNotice, fontSize = 12.sp, color = IosParityColors.Warning)
-  if (predefinedOptions.isNotEmpty()) {
-    Spacer(Modifier.height(6.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      predefinedOptions.forEach { option ->
-        SmallActionButton(
-          text = option,
-          selected = selectedOptions.contains(option),
-          onClick = { onOptionClick(option) },
-        )
-      }
-    }
-  }
 }
 
 @Composable
-fun SmallActionButton(text: String, selected: Boolean = false, onClick: () -> Unit = {}) {
+fun SmallActionButton(text: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit = {}) {
   Surface(
-    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick),
+    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+      .toggleable(value = selected, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() }),
     shape = RoundedCornerShape(8.dp),
     color = if (selected) IosParityColors.PrimaryButton else IosParityColors.Background,
     border = BorderStroke(1.dp, IosParityColors.SurfaceBorder),
   ) {
-    Text(
-      text = text,
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-      fontSize = 14.sp,
-      color = if (selected) IosParityColors.OnPrimaryButton else IosParityColors.Text,
-    )
+    Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+      Icon(
+        imageVector = if (selected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+        contentDescription = null,
+        tint = if (selected) IosParityColors.OnPrimaryButton else IosParityColors.Text,
+        modifier = Modifier.size(20.dp),
+      )
+      Spacer(Modifier.width(8.dp))
+      Text(
+        text = text,
+        fontSize = 14.sp,
+        color = if (selected) IosParityColors.OnPrimaryButton else IosParityColors.Text,
+      )
+    }
   }
 }
 
@@ -328,6 +359,9 @@ fun FooterBar(
   onSubmitClick: () -> Unit,
   enabled: Boolean,
   modifier: Modifier = Modifier,
+  continueEnabled: Boolean = enabled,
+  submitLabel: String = "确认",
+  continueLabel: String = "继续",
 ) {
   Box(modifier = modifier.fillMaxWidth()) {
     Column(
@@ -344,11 +378,11 @@ fun FooterBar(
             .weight(1f)
             .height(40.dp),
           onClick = onContinueClick,
-          enabled = enabled,
+          enabled = continueEnabled,
           colors = ButtonDefaults.buttonColors(containerColor = IosParityColors.Background, contentColor = IosParityColors.Text),
           shape = RoundedCornerShape(8.dp),
         ) {
-          Text("继续", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+          Text(continueLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
         Button(
           modifier = Modifier
@@ -359,7 +393,7 @@ fun FooterBar(
           colors = ButtonDefaults.buttonColors(containerColor = IosParityColors.PrimaryButton, contentColor = IosParityColors.OnPrimaryButton),
           shape = RoundedCornerShape(8.dp),
         ) {
-          Text("确认", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+          Text(submitLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
       }
     }

@@ -35,6 +35,22 @@ class MirrorRelayTest {
       .put("request", JSONObject().put("id", id).put("message", "Mac 原文")
         .put("predefined_options", org.json.JSONArray(listOf("  原样选项  ")))))
 
+  @Test fun mirrorDisplaysSourceConversationTitleWithoutChangingReplyIdentity() {
+    val json = mirrorState()
+    val wireRequest = json.getJSONObject("payload").getJSONObject("request")
+    wireRequest.put("conversation_title", "  Mac 的真实会话标题  ")
+    val request = BridgeJsonParser.parseRequest(json.toString())!!
+    assertEquals("  Mac 的真实会话标题  ", request.conversationTitle)
+    assertEquals(id, request.requestId)
+    assertEquals("", request.projectPath)
+    assertEquals(RequestOrigin.Mirror, request.origin)
+    assertEquals(request.conversationTitle, WorkbenchUiState().receiveRequest(request).popupTitle)
+    for (title in listOf(JSONObject.NULL, "  ")) {
+      wireRequest.put("conversation_title", title)
+      assertEquals("未命名会话", BridgeJsonParser.parseRequest(json.toString())!!.conversationTitle)
+    }
+  }
+
   @Test fun mirrorHasNoLocalProjectTimelineOrImagesAndCannotMasqueradeAsOrdinaryRequest() {
     val json = mirrorState()
     val request = BridgeJsonParser.parseRequest(json.toString())!!

@@ -2,6 +2,8 @@ package com.kexin94yyds.iterate.mobile
 
 import android.Manifest
 import android.app.Activity
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,6 +51,7 @@ fun AndroidMobileWorkbenchApp(
     voiceController?.onPermissionResult(granted)
   }
 
+  val clipboard=LocalClipboardManager.current
   val state = viewModel.state
   DisposableEffect(voiceController, state.request?.requestId, state.request?.projectPath, state.route) {
     onDispose {
@@ -65,7 +68,12 @@ fun AndroidMobileWorkbenchApp(
         onNotificationClick = { viewModel.toggleNotifications() },
         onThemeClick = { viewModel.toggleTheme() },
         onNewChatClick = { viewModel.openNewChat() },
+        onSelectClosedDraft = viewModel::selectClosedDraft,
+        onQueryOriginalReply = {viewModel.queryOriginalReply()},
+        onCopyClosedDraft = {viewModel.closedDraftCopy()?.let{clipboard.setText(AnnotatedString(it))}},
         onSelectRequest = viewModel::selectRequest,
+        onSelectNativeHistory = viewModel::selectNativeHistory,
+        onTimelineMove = viewModel::moveTimeline,
         onUserInputChange = viewModel::setUserInput,
         onOptionClick = viewModel::toggleOption,
         onInsertTemplate = viewModel::insertQuickTemplate,
